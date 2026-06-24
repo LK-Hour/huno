@@ -1,10 +1,13 @@
 import { Command } from "commander";
-import chalk from "chalk";
 import fs from "fs/promises";
 import path from "path";
+import React from "react";
 import { scanProject } from "../core/scanner.js";
 import { type Result } from "../utils/errors.js";
 import { type AuditIssue, type AuditReport, type AuditSeverity } from "../types/audit.js";
+import { Header, AuditTable, ProgressSteps, WarningBox, ErrorBox, type AuditFinding } from "../ui/components/index.js";
+import { renderUI } from "../ui/renderer.js";
+import { Box, Text } from "ink";
 
 const LARGE_FILE_THRESHOLD = 500 * 1024; // 500KB
 const SECRET_PATTERNS = [
@@ -417,94 +420,17 @@ async function checkLargeFiles(
   return issues;
 }
 
-function severityColor(severity: AuditSeverity): (text: string) => string {
+
+
+function severityToFinding(severity: AuditSeverity): AuditFinding["severity"] {
   switch (severity) {
     case "high":
-      return chalk.red;
+      return "critical";
     case "medium":
-      return chalk.yellow;
+      return "warning";
     case "low":
-      return chalk.gray;
+      return "info";
   }
-}
-
-function severityIcon(severity: AuditSeverity): string {
-  switch (severity) {
-    case "high":
-      return "✗";
-    case "medium":
-      return "⚠";
-    case "low":
-      return "ℹ";
-  }
-}
-
-function formatTextReport(report: AuditReport): string {
-  const lines: string[] = [];
-
-  lines.push("");
-  lines.push(chalk.bold.cyan("═".repeat(60)));
-  lines.push(chalk.bold.cyan("  HUNO AUDIT REPORT"));
-  lines.push(chalk.bold.cyan("═".repeat(60)));
-  lines.push("");
-
-  lines.push(chalk.white(`Project: ${report.projectName}`));
-  lines.push(chalk.white(`Root: ${report.root}`));
-  lines.push(chalk.white(`Generated: ${report.generatedAt}`));
-  lines.push("");
-
-  // Summary
-  lines.push(chalk.bold("Summary:"));
-  const { summary } = report;
-  lines.push(
-    `  ${chalk.red(`High: ${summary.high}`)}  ${chalk.yellow(`Medium: ${summary.medium}`)}  ${chalk.gray(`Low: ${summary.low}`)}  Total: ${summary.total}`
-  );
-  lines.push("");
-
-  if (report.issues.length === 0) {
-    lines.push(chalk.green("✓ No issues found! Your project looks great."));
-    lines.push("");
-    return lines.join("\n");
-  }
-
-  // Group by severity
-  const highIssues = report.issues.filter((i) => i.severity === "high");
-  const mediumIssues = report.issues.filter((i) => i.severity === "medium");
-  const lowIssues = report.issues.filter((i) => i.severity === "low");
-
-  const printGroup = (title: string, issues: AuditIssue[]) => {
-    if (issues.length === 0) return;
-    lines.push(chalk.bold(`── ${title} (${issues.length}) ──`));
-    lines.push("");
-    for (const issue of issues) {
-      const color = severityColor(issue.severity);
-      const icon = severityIcon(issue.severity);
-      lines.push(color(`  ${icon} [${issue.category}] ${issue.message}`));
-      if (issue.file) {
-        lines.push(chalk.gray(`    at ${issue.file}${issue.line ? `:${issue.line}` : ""}`));
-      }
-      if (issue.suggestion) {
-        lines.push(chalk.gray(`    → ${issue.suggestion}`));
-      }
-      lines.push("");
-    }
-  };
-
-  printGroup("High Priority", highIssues);
-  printGroup("Medium Priority", mediumIssues);
-  printGroup("Low Priority", lowIssues);
-
-  lines.push(chalk.bold.cyan("─".repeat(60)));
-
-  if (highIssues.length > 0) {
-    lines.push(chalk.red(`\n${highIssues.length} high-priority issue(s) require immediate attention.`));
-  }
-  if (mediumIssues.length > 0) {
-    lines.push(chalk.yellow(`${mediumIssues.length} medium-priority issue(s) should be addressed soon.`));
-  }
-
-  lines.push("");
-  return lines.join("\n");
 }
 
 export const auditCommand = new Command("audit")
@@ -525,12 +451,21 @@ export const auditCommand = new Command("audit")
     tests?: boolean;
     maxIssues?: number;
   }) => {
-    console.log(chalk.cyan("Running audit..."));
-
     const scanResult = await scanProject();
     if (!scanResult.ok) {
-      console.error(chalk.red((scanResult as any).error.toString()));
-      process.exit(1);
+      renderUI(
+        React.createElement(
+          Box,
+          { flexDirection: "column" },
+          React.createElement(Header, { tagline: "Project Audit" }),
+          React.createElement(ErrorBox, {
+            message: "Scan failed. Run `huno init` first.",
+            code: "SCAN_FAILED",
+          })
+        )
+      );
+      setTimeout(() => process.exit(1), 100);
+      return;
     }
 
     const map = scanResult.data;
@@ -699,12 +634,49 @@ export const auditCommand = new Command("audit")
 
     if (options.json) {
       console.log(JSON.stringify(report, null, 2));
-    } else {
-      console.log(formatTextReport(report));
+      return;
     }
 
+    // Convert AuditIssue[] to AuditFinding[] for Ink component
+    const findings: AuditFinding[] = filteredIssues.map((issue) => ({
+      severity: issue.severity === "high" ? "critical" : issue.severity === "medium" ? "warning" : "info",
+      category: issue.category,
+      message: issue.message,
+      file: issue.file,
+    }));
+
+    // Render with Ink
+    const summaryText = `${report.summary.high} high, ${report.summary.medium} medium, ${report.summary.low} low`;
+
+    renderUI(
+      React.createElement(
+        Box,
+        { flexDirection: "column" },
+        React.createElement(Header, { tagline: "Project Audit" }),
+        React.createElement(ProgressSteps, {
+          steps: [
+            { label: "Scanning project structure" },
+            { label: "Checking for secrets" },
+            { label: "Scanning code quality" },
+            { label: "Generating report" },
+          ],
+          current: 3,
+        }),
+        findings.length === 0
+          ? React.createElement(AuditTable, { findings: [], title: "Audit Results" })
+          : React.createElement(AuditTable, {
+              findings,
+              title: `Audit Results (${summaryText})`,
+            }),
+        report.summary.high > 0 &&
+          React.createElement(WarningBox, {
+            title: "High Priority Issues",
+            message: `${report.summary.high} high-priority issue(s) require immediate attention.`,
+          })
+      )
+    );
+
     // Exit with error code if high-priority issues found
-    if (report.summary.high > 0) {
-      process.exit(1);
-    }
+    const exitCode = report.summary.high > 0 ? 1 : 0;
+    setTimeout(() => process.exit(exitCode), 100);
   });

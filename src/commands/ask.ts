@@ -1,72 +1,157 @@
 import { Command } from "commander";
-import chalk from "chalk";
+import React from "react";
+import { Box, Text } from "ink";
 import { buildContext } from "../core/context.js";
 import { getActiveProvider } from "../providers/index.js";
+import { Header, ProgressSteps, ContextFiles, ErrorBox } from "../ui/components/index.js";
+import { renderUI } from "../ui/renderer.js";
 import type { ContextBuildResult } from "../types/context.js";
 import type { Provider } from "../providers/base.js";
+
+const STEPS = [
+  { label: "Building context" },
+  { label: "Selecting provider" },
+  { label: "Thinking" },
+  { label: "Answering" },
+];
 
 export const askCommand = new Command("ask")
   .description("Ask a question about your project.")
   .argument("<question>", "The question to ask")
   .action(async (question: string) => {
-    console.log(chalk.blue("Building context..."));
+    // Step 1: Building context
+    renderUI(
+      React.createElement(
+        Box,
+        { flexDirection: "column" },
+        React.createElement(Header, { tagline: "Project Q&A" }),
+        React.createElement(ProgressSteps, { steps: STEPS, current: 0 })
+      )
+    );
 
-    // Build context
     const contextResult = await buildContext(question);
     if (!contextResult.ok) {
-      console.error(chalk.red(`Error: ${contextResult.error.message}`));
-      if (contextResult.error.hint) {
-        console.error(chalk.yellow(contextResult.error.hint));
-      }
-      process.exit(1);
+      renderUI(
+        React.createElement(
+          Box,
+          { flexDirection: "column" },
+          React.createElement(Header, { tagline: "Project Q&A" }),
+          React.createElement(ProgressSteps, { steps: STEPS, current: 0 }),
+          React.createElement(ErrorBox, {
+            message: contextResult.error.message,
+            code: contextResult.error.code,
+            hint: contextResult.error.hint,
+          })
+        )
+      );
+      setTimeout(() => process.exit(1), 100);
+      return;
     }
 
     const context: ContextBuildResult = contextResult.data;
 
-    // Show context files if any
-    if (context.files.relevantFiles.length > 0) {
-      console.log(
-        chalk.dim(
-          `Using ${context.files.relevantFiles.length} file(s) as context`
-        )
-      );
-      for (const f of context.files.relevantFiles) {
-        console.log(chalk.dim(`  - ${f.path}`));
-      }
-    }
-    if (context.files.memory) {
-      console.log(chalk.dim("Using project memory as context"));
-    }
+    // Collect context file paths
+    const contextPaths: string[] = context.files.relevantFiles.map((f) => f.path);
 
-    // Get provider
-    console.log(chalk.blue("Thinking..."));
+    // Step 2: Selecting provider
+    renderUI(
+      React.createElement(
+        Box,
+        { flexDirection: "column" },
+        React.createElement(Header, { tagline: "Project Q&A" }),
+        React.createElement(ProgressSteps, { steps: STEPS, current: 1 }),
+        React.createElement(ContextFiles, { files: contextPaths })
+      )
+    );
+
     const providerResult = await getActiveProvider();
     if (!providerResult.ok) {
-      console.error(chalk.red(`Error: ${providerResult.error.message}`));
-      if (providerResult.error.hint) {
-        console.error(chalk.yellow(providerResult.error.hint));
-      }
-      process.exit(1);
+      renderUI(
+        React.createElement(
+          Box,
+          { flexDirection: "column" },
+          React.createElement(Header, { tagline: "Project Q&A" }),
+          React.createElement(ProgressSteps, { steps: STEPS, current: 1 }),
+          React.createElement(ContextFiles, { files: contextPaths }),
+          React.createElement(ErrorBox, {
+            message: providerResult.error.message,
+            code: providerResult.error.code,
+            hint: providerResult.error.hint,
+          })
+        )
+      );
+      setTimeout(() => process.exit(1), 100);
+      return;
     }
 
     const provider: Provider = providerResult.data;
-    console.log(chalk.dim(`Provider: ${provider.name} (${provider.model})`));
 
-    // Build full prompt with context
+    // Step 3: Thinking
+    renderUI(
+      React.createElement(
+        Box,
+        { flexDirection: "column" },
+        React.createElement(Header, { tagline: "Project Q&A" }),
+        React.createElement(ProgressSteps, { steps: STEPS, current: 2 }),
+        React.createElement(ContextFiles, { files: contextPaths }),
+        React.createElement(
+          Box,
+          { marginTop: 1 },
+          React.createElement(Text, { dimColor: true }, `Provider: ${provider.name} (${provider.model})`)
+        )
+      )
+    );
+
     const fullPrompt = buildFullPrompt(context);
 
-    // Call provider
     const result = await provider.complete(fullPrompt, context.systemPrompt);
 
     if (!result.ok) {
-      console.error(chalk.red(`Error: ${result.error.message}`));
-      if (result.error.hint) {
-        console.error(chalk.yellow(result.error.hint));
-      }
-      process.exit(1);
+      renderUI(
+        React.createElement(
+          Box,
+          { flexDirection: "column" },
+          React.createElement(Header, { tagline: "Project Q&A" }),
+          React.createElement(ProgressSteps, { steps: STEPS, current: 2 }),
+          React.createElement(ContextFiles, { files: contextPaths }),
+          React.createElement(
+            Box,
+            { marginTop: 1 },
+            React.createElement(Text, { dimColor: true }, `Provider: ${provider.name} (${provider.model})`)
+          ),
+          React.createElement(ErrorBox, {
+            message: result.error.message,
+            code: result.error.code,
+            hint: result.error.hint,
+          })
+        )
+      );
+      setTimeout(() => process.exit(1), 100);
+      return;
     }
 
-    console.log("\n" + result.data);
+    // Step 4: Answering
+    renderUI(
+      React.createElement(
+        Box,
+        { flexDirection: "column" },
+        React.createElement(Header, { tagline: "Project Q&A" }),
+        React.createElement(ProgressSteps, { steps: STEPS, current: 3 }),
+        React.createElement(ContextFiles, { files: contextPaths }),
+        React.createElement(
+          Box,
+          { marginTop: 1 },
+          React.createElement(Text, { dimColor: true }, `Provider: ${provider.name} (${provider.model})`)
+        ),
+        React.createElement(
+          Box,
+          { borderStyle: "round", paddingX: 1, marginTop: 1 },
+          React.createElement(Text, null, result.data)
+        )
+      )
+    );
+
+    setTimeout(() => process.exit(0), 100);
   });
 
 function buildFullPrompt(context: {
