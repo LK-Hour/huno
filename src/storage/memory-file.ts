@@ -89,5 +89,33 @@ export function parseMemoryEntries(content: string): MemoryEntry[] {
 
 export function searchMemory(entries: MemoryEntry[], query: string): MemoryEntry[] {
   const q = query.toLowerCase();
-  return entries.filter((e) => e.text.toLowerCase().includes(q));
+  const queryWords = q.split(/\s+/).filter((w) => w.length > 1);
+
+  if (queryWords.length === 0) {
+    return entries.filter((e) => e.text.toLowerCase().includes(q));
+  }
+
+  // Score each entry by how many distinct query words it matches
+  const scored = entries.map((entry) => {
+    const textLower = entry.text.toLowerCase();
+    let score = 0;
+    for (const word of queryWords) {
+      if (textLower.includes(word)) {
+        score++;
+      }
+    }
+    return { entry, score };
+  });
+
+  // Sort by score descending
+  scored.sort((a, b) => b.score - a.score);
+
+  // If at least one match, return top 5 by score
+  const matched = scored.filter((s) => s.score > 0);
+  if (matched.length > 0) {
+    return matched.slice(0, 5).map((s) => s.entry);
+  }
+
+  // If no matches at all, return all entries so the LLM still has context
+  return entries;
 }

@@ -1,0 +1,31 @@
+{
+  "version": "0.1.0",
+  "projectName": "huno",
+  "root": "/home/hour/Documents/LK HOUR/huno",
+  "generatedAt": "2026-06-23T22:47:21.888Z",
+  "stack": {
+    "languages": [
+      "TypeScript"
+    ],
+    "frameworks": [],
+    "database": [],
+    "infrastructure": []
+  },
+  "packageManagers": [
+    "npm/pnpm/yarn",
+    "npm"
+  ],
+  "importantFiles": [
+    "package.json",
+    "tsconfig.json"
+  ],
+  "directories": {
+    "src": "src/"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  }
+}

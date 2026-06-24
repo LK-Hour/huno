@@ -7,3 +7,7 @@ export function getProjectRoot(): string {
 export function getHunoDir(): string {
   return `${getProjectRoot()}/.huno`;
 }
+
+export function getHunoIgnorePath(): string {
+  return `${getProjectRoot()}/.hunoignore`;
+}

@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "permissions": {
+    "allowRead": true,
+    "allowWrite": "ask",
+    "allowCommand": "ask",
+    "allowDestructive": false
+  },
+  "memory": {
+    "enabled": true,
+    "storage": "local"
+  }
+}

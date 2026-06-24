@@ -18,6 +18,50 @@ const SECRET_PATTERNS = [
   /-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/,
 ];
 
+// Known non-secret values that should be skipped
+const SECRET_WHITELIST = new Set([
+  "ollama",
+  "localhost",
+  "openrouter",
+  "example",
+  "placeholder",
+  "your-key-here",
+  "xxx",
+  "test",
+]);
+
+// Line-level patterns that indicate non-secret context (comments, type definitions, etc.)
+const SKIP_LINE_PATTERNS = [
+  /\binterface\s/,
+  /\btype\s/,
+  /@param/,
+  /\/\/\s/,
+  /\/\*\s/,
+  /^\s*\*\s/, // JSDoc continuation lines
+];
+
+function isIgnoredLine(line: string): boolean {
+  return SKIP_LINE_PATTERNS.some((p) => p.test(line));
+}
+
+function extractSecretValue(line: string): string | null {
+  // Try to extract the quoted value from the line
+  const match = line.match(/[:=]\s*['"]([^'"]+)['"]/);
+  if (match && match[1]) return match[1].toLowerCase();
+  return null;
+}
+
+function isWhitelistedSecret(value: string): boolean {
+  const lower = value.toLowerCase();
+  // Check exact match
+  if (SECRET_WHITELIST.has(lower)) return true;
+  // Check if the value contains any whitelisted term
+  for (const term of SECRET_WHITELIST) {
+    if (lower.includes(term)) return true;
+  }
+  return false;
+}
+
 const IGNORED_DIRS_FOR_SCAN = new Set([
   "node_modules",
   ".git",
@@ -29,6 +73,54 @@ const IGNORED_DIRS_FOR_SCAN = new Set([
   "vendor",
   "__pycache__",
 ]);
+
+/**
+ * Load ignore patterns from .gitignore and .hunoignore in the project root.
+ * Returns an array of non-empty, non-comment lines.
+ */
+async function loadIgnorePatterns(root: string): Promise<string[]> {
+  const ignoreFiles = [".gitignore", ".hunoignore"];
+  const patterns: string[] = [];
+
+  for (const file of ignoreFiles) {
+    try {
+      const content = await fs.readFile(path.join(root, file), "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        patterns.push(trimmed);
+      }
+    } catch {
+      // file doesn't exist, skip
+    }
+  }
+
+  return patterns;
+}
+
+/**
+ * Check if a file path matches any of the ignore patterns.
+ * Uses simple substring matching (no full glob support needed).
+ */
+function isFileIgnored(filePath: string, root: string, patterns: string[]): boolean {
+  const relPath = path.relative(root, filePath);
+  for (const pattern of patterns) {
+    // Handle directory patterns (ending with /)
+    if (pattern.endsWith("/")) {
+      if (relPath.startsWith(pattern) || relPath.includes("/" + pattern)) return true;
+    } else if (pattern.startsWith("/")) {
+      // Anchored pattern
+      if (relPath.startsWith(pattern.slice(1))) return true;
+    } else {
+      // Substring match on the relative path
+      if (relPath.includes(pattern)) return true;
+      // Also check if any path segment matches exactly
+      const segments = relPath.split("/");
+      if (segments.includes(pattern)) return true;
+    }
+  }
+  return false;
+}
 
 const CONFIG_FILES = new Set([
   ".env",
@@ -160,7 +252,8 @@ function checkOutdatedDependencies(pkg: any): AuditIssue[] {
 
 async function scanForSecrets(
   root: string,
-  allFiles: string[]
+  allFiles: string[],
+  ignorePatterns: string[]
 ): Promise<AuditIssue[]> {
   const issues: AuditIssue[] = [];
   const textExtensions = [
@@ -186,6 +279,7 @@ async function scanForSecrets(
 
   for (const filePath of allFiles) {
     if (isConfigFile(filePath)) continue;
+    if (isFileIgnored(filePath, root, ignorePatterns)) continue;
     const ext = path.extname(filePath).toLowerCase();
     if (!textExtensions.includes(ext)) continue;
 
@@ -198,8 +292,16 @@ async function scanForSecrets(
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+
+        // Skip lines that are comments, type definitions, etc.
+        if (isIgnoredLine(line)) continue;
+
         for (const pattern of SECRET_PATTERNS) {
           if (pattern.test(line)) {
+            // Check if the matched value is whitelisted
+            const secretValue = extractSecretValue(line);
+            if (secretValue && isWhitelistedSecret(secretValue)) continue;
+
             const relPath = path.relative(root, filePath);
             issues.push({
               id: `secret-${relPath}-${i + 1}`,
@@ -225,7 +327,8 @@ async function scanForSecrets(
 
 async function scanCodeQuality(
   root: string,
-  allFiles: string[]
+  allFiles: string[],
+  ignorePatterns: string[]
 ): Promise<AuditIssue[]> {
   const issues: AuditIssue[] = [];
   const codeExtensions = [".js", ".ts", ".jsx", ".tsx", ".py", ".rb", ".go", ".java", ".rs"];
@@ -234,6 +337,7 @@ async function scanCodeQuality(
     const ext = path.extname(filePath).toLowerCase();
     if (!codeExtensions.includes(ext)) continue;
     if (isConfigFile(filePath)) continue;
+    if (isFileIgnored(filePath, root, ignorePatterns)) continue;
 
     try {
       const stat = await fs.stat(filePath);
@@ -406,7 +510,21 @@ function formatTextReport(report: AuditReport): string {
 export const auditCommand = new Command("audit")
   .description("Run static analysis on the project and report issues.")
   .option("--json", "Output results as JSON")
-  .action(async (options: { json?: boolean }) => {
+  .option("--security", "Only show security issues (secrets)")
+  .option("--docs", "Only show documentation issues (README, LICENSE)")
+  .option("--code", "Only show code quality issues (console.log, TODO)")
+  .option("--deps", "Only show dependency issues")
+  .option("--tests", "Only show testing issues")
+  .option("--max-issues <N>", "Limit output to N most important issues", parseInt)
+  .action(async (options: {
+    json?: boolean;
+    security?: boolean;
+    docs?: boolean;
+    code?: boolean;
+    deps?: boolean;
+    tests?: boolean;
+    maxIssues?: number;
+  }) => {
     console.log(chalk.cyan("Running audit..."));
 
     const scanResult = await scanProject();
@@ -418,6 +536,9 @@ export const auditCommand = new Command("audit")
     const map = scanResult.data;
     const root = map.root;
     const issues: AuditIssue[] = [];
+
+    // Load ignore patterns
+    const ignorePatterns = await loadIgnorePatterns(root);
 
     // 1. Check for .env without .env.example
     const allRootFiles = await fs.readdir(root);
@@ -534,11 +655,33 @@ export const auditCommand = new Command("audit")
     const largeFileIssues = await checkLargeFiles(root, allFiles);
     issues.push(...largeFileIssues);
 
-    const secretIssues = await scanForSecrets(root, allFiles);
+    const secretIssues = await scanForSecrets(root, allFiles, ignorePatterns);
     issues.push(...secretIssues);
 
-    const qualityIssues = await scanCodeQuality(root, allFiles);
+    const qualityIssues = await scanCodeQuality(root, allFiles, ignorePatterns);
     issues.push(...qualityIssues);
+
+    // 9. Apply filters based on flags
+    const activeFilters: string[] = [];
+    if (options.security) activeFilters.push("Security");
+    if (options.docs) activeFilters.push("Documentation", "Legal");
+    if (options.code) activeFilters.push("Code Quality");
+    if (options.deps) activeFilters.push("Dependencies");
+    if (options.tests) activeFilters.push("Testing");
+
+    let filteredIssues = issues;
+    if (activeFilters.length > 0) {
+      filteredIssues = issues.filter((issue) => activeFilters.includes(issue.category));
+    }
+
+    // 10. Apply max-issues limit (prioritize by severity: high > medium > low)
+    if (options.maxIssues !== undefined && options.maxIssues > 0) {
+      const severityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+      filteredIssues = [...filteredIssues].sort(
+        (a, b) => (severityOrder[a.severity] ?? 99) - (severityOrder[b.severity] ?? 99)
+      );
+      filteredIssues = filteredIssues.slice(0, options.maxIssues);
+    }
 
     // Build report
     const report: AuditReport = {
@@ -546,12 +689,12 @@ export const auditCommand = new Command("audit")
       projectName: map.projectName,
       root,
       summary: {
-        total: issues.length,
-        high: issues.filter((i) => i.severity === "high").length,
-        medium: issues.filter((i) => i.severity === "medium").length,
-        low: issues.filter((i) => i.severity === "low").length,
+        total: filteredIssues.length,
+        high: filteredIssues.filter((i) => i.severity === "high").length,
+        medium: filteredIssues.filter((i) => i.severity === "medium").length,
+        low: filteredIssues.filter((i) => i.severity === "low").length,
       },
-      issues,
+      issues: filteredIssues,
     };
 
     if (options.json) {
