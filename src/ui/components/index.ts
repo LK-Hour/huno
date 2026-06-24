@@ -7,3 +7,4 @@ export { ApprovalPrompt } from "./ApprovalPrompt.js";
 export { AuditTable } from "./AuditTable.js";
 export { WarningBox } from "./WarningBox.js";
 export { ErrorBox } from "./ErrorBox.js";
+export { ReplPrompt } from "./ReplPrompt.js";

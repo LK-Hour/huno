@@ -2,7 +2,7 @@
   "version": "0.1.0",
   "projectName": "huno",
   "root": "/home/hour/Documents/LK HOUR/huno",
-  "generatedAt": "2026-06-24T07:41:18.481Z",
+  "generatedAt": "2026-06-24T14:11:04.931Z",
   "stack": {
     "languages": [
       "TypeScript"
@@ -20,6 +20,7 @@
     "tsconfig.json"
   ],
   "directories": {
+    "assets": "assets/",
     "src": "src/"
   },
   "scripts": {

@@ -9,6 +9,7 @@ import { rememberCommand } from "./commands/remember.js";
 import { recallCommand } from "./commands/recall.js";
 import { askCommand } from "./commands/ask.js";
 import { auditCommand } from "./commands/audit.js";
+import { runRepl } from "./repl.js";
 
 const program = new Command();
 
@@ -24,7 +25,15 @@ program.addCommand(recallCommand);
 program.addCommand(auditCommand);
 program.addCommand(askCommand);
 
-program.parseAsync(process.argv).catch((err: unknown) => {
-  console.error(chalk.red(`Error: ${err instanceof Error ? err.message : err}`));
-  process.exit(1);
-});
+// If no arguments given, launch interactive REPL
+if (process.argv.length <= 2) {
+  runRepl().catch((err: unknown) => {
+    console.error(chalk.red(`Error: ${err instanceof Error ? err.message : err}`));
+    process.exit(1);
+  });
+} else {
+  program.parseAsync(process.argv).catch((err: unknown) => {
+    console.error(chalk.red(`Error: ${err instanceof Error ? err.message : err}`));
+    process.exit(1);
+  });
+}

@@ -1619,6 +1619,134 @@ Stop after UI is improved without changing command behavior.
 
 ---
 
+## 14.5: Interactive REPL Mode (Claude Code / Gemini CLI Style)
+
+## Goal
+
+Implement an interactive REPL mode so users can run `huno` with no arguments and get a persistent prompt loop — similar to Claude Code or Gemini CLI.
+
+## Scope
+
+When the user runs `huno` with no subcommand, they enter an interactive session. Inside the REPL:
+
+- A branded Huno header is shown
+- The user types commands/questions at a `>` prompt
+- The user can type natural language questions (routed to `huno ask`)
+- The user can type slash commands (`/audit`, `/explain`, `/remember`, `/recall`, `/help`, `/exit`)
+- File context from the current project is displayed
+- The session persists until the user types `/exit` or presses Ctrl+C
+
+## User Experience
+
+```bash
+$ huno
+╭─ Huno ─────────────────────────────────────╮
+│  ██╗  ██╗██╗   ██╗███╗   ██╗ ██████╗       │
+│  ██║  ██║██║   ██║████╗  ██║██╔═══██╗      │
+│  ███████║██║   ██║██╔██╗ ██║██║   ██║      │
+│  ██╔══██║██║   ██║██║╚██╗██║██║   ██║      │
+│  ██║  ██║╚██████╔╝██║ ╚████║╚██████╔╝      │
+│  ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝       │
+│                                             │
+│  Project: huno                              │
+│  Type a question or /help for commands.     │
+╰─────────────────────────────────────────────╯
+
+> where is authentication handled?
+
+Using context:
+  - src/commands/ask.ts
+  - src/core/context.ts
+  - .huno/memory.md
+
+Answer:
+Authentication is not yet implemented in this project.
+
+> /audit
+
+Running audit...
+
+[audit results shown]
+
+> /exit
+Goodbye!
+```
+
+## Files to Create
+
+```text
+src/repl.ts          — REPL loop logic
+src/ui/components/ReplPrompt.tsx — The input prompt component
+```
+
+## Files to Modify
+
+```text
+src/index.ts         — Add REPL mode when no command given
+src/ui/components/index.ts — Export ReplPrompt
+```
+
+## Tasks
+
+```text
+[ ] Create src/repl.ts with REPL loop logic.
+[ ] Create src/ui/components/ReplPrompt.tsx for the input area.
+[ ] Route natural language input to buildContext() + provider.
+[ ] Route slash commands (/audit, /explain, /remember, /recall, /help, /exit).
+[ ] Show project context (project name, stack) in header.
+[ ] Show file context (recent files from project map) in REPL header.
+[ ] Handle Ctrl+C gracefully with goodbye message.
+[ ] Handle /exit command.
+[ ] Show typing indicator while waiting for provider response.
+[ ] Keep JSON output clean (no Ink in --json mode).
+```
+
+## Slash Commands
+
+```text
+/help        — Show available commands
+/audit       — Run huno audit
+/explain     — Run huno explain
+/remember    — Save a memory (prompts for text)
+/recall      — Search memories (prompts for query)
+/context    — Show current project context files
+/exit        — Exit REPL
+/clear       — Clear screen
+```
+
+## Input Routing
+
+```text
+Input starts with /     → Route as slash command
+Input is plain text     → Route to ask command (build context + provider)
+Empty input             → Ignore, re-prompt
+```
+
+## Validation Commands
+
+```bash
+npx tsx src/index.ts           # Should enter REPL
+npx tsx src/index.ts --help    # Should still show help
+npx tsx src/index.ts audit     # Should still run audit directly
+```
+
+## Acceptance Criteria
+
+```text
+[ ] `huno` with no args enters interactive REPL
+[ ] Natural language routes to ask
+[ ] Slash commands work (/help, /audit, /explain, /exit)
+[ ] Ctrl+C exits gracefully
+[ ] Project context shown in header
+[ ] Direct commands still work (huno audit, huno explain, etc.)
+```
+
+## Stop Condition
+
+After REPL mode works with ask + slash commands.
+
+---
+
 ## 20. Milestone 15: Documentation Generator
 
 ## Goal
