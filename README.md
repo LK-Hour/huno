@@ -1,6 +1,6 @@
 # Huno
 <p align="center">
-  <img src="assets/huno_profile_256px.svg" width="200" alt="Huno Profile">
+  <img src="assets/huno_profile_256px.ico" width="200" alt="Huno Profile">
 </p>
 > **Who knows your codebase? Huno knows.**
 
