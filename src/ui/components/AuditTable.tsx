@@ -4,7 +4,7 @@ import { brand, neutral, semantic } from "../theme.js";
 
 type Severity = "info" | "warning" | "error" | "critical";
 
-interface AuditFinding {
+export interface AuditFinding {
   severity: Severity;
   category: string;
   message: string;

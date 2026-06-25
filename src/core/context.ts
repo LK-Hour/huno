@@ -11,6 +11,20 @@ import type { ContextBuildResult } from "../types/context.js";
 const MAX_FILE_SIZE = 3000; // characters per file excerpt
 const MAX_FILES = 5;
 const MAX_CONTENT_SEARCH_FILES = 3;
+const DEFAULT_IGNORE_PATTERNS = [
+  ".git",
+  ".huno",
+  "node_modules",
+  "dist",
+  "build",
+  ".next",
+  "coverage",
+  ".turbo",
+  ".cache",
+  "venv",
+  ".venv",
+  "__pycache__",
+];
 const CODE_EXTENSIONS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java",
   ".rb", ".php", ".cs", ".c", ".cpp", ".h", ".hpp", ".swift",
@@ -221,7 +235,7 @@ export async function buildContext(
   const keywords = extractKeywords(question);
 
   // 0. Read .hunoignore patterns
-  const ignorePatterns = await readHunoIgnore();
+  const ignorePatterns = [...DEFAULT_IGNORE_PATTERNS, ...(await readHunoIgnore())];
 
   // 1. Read project-map.json
   let projectMapStr: string | null = null;

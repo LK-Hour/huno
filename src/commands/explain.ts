@@ -2,7 +2,7 @@ import { Command } from "commander";
 import React from "react";
 import { Box, Text } from "ink";
 import { scanProject } from "../core/scanner.js";
-import { writeHunoFile } from "../storage/huno-dir.js";
+import { isHunoInitialized, writeHunoFile } from "../storage/huno-dir.js";
 import { serializeProjectMap } from "../storage/project-map.js";
 import { renderUI } from "../ui/renderer.js";
 import { Header, ProjectCard, ProgressSteps, ContextFiles } from "../ui/components/index.js";
@@ -12,18 +12,12 @@ export const explainCommand = new Command("explain")
   .option("--short", "Show short summary only")
   .option("--json", "Output as JSON")
   .action(async (options: { short?: boolean; json?: boolean }) => {
-    // Step 1: Show header
-    renderUI(
-      React.createElement(
-        Box,
-        { flexDirection: "column" },
-        React.createElement(Header, { tagline: "Project Intelligence" })
-      )
-    );
-
-    // Step 2: Scan
     const scanResult = await scanProject();
     if (!scanResult.ok) {
+      if (options.json) {
+        console.error(JSON.stringify({ ok: false, error: scanResult.error.message }, null, 2));
+        process.exit(1);
+      }
       renderUI(
         React.createElement(
           Box,
@@ -42,8 +36,26 @@ export const explainCommand = new Command("explain")
 
     const map = scanResult.data;
 
-    // Save project map
-    const saveResult = await writeHunoFile("project-map.json", serializeProjectMap(map));
+    const hunoInitialized = await isHunoInitialized();
+    if (hunoInitialized) {
+      const saveResult = await writeHunoFile("project-map.json", serializeProjectMap(map));
+      if (!saveResult.ok && !options.json) {
+        renderUI(
+          React.createElement(
+            Box,
+            { flexDirection: "column" },
+            React.createElement(Header, { tagline: "Project Intelligence" }),
+            React.createElement(
+              Box,
+              { borderStyle: "round", paddingX: 2, marginTop: 1 },
+              React.createElement(Text, { color: "red" }, saveResult.error.message)
+            )
+          )
+        );
+        setTimeout(() => process.exit(1), 100);
+        return;
+      }
+    }
 
     // JSON output mode
     if (options.json) {
@@ -74,7 +86,7 @@ export const explainCommand = new Command("explain")
             { label: "Building project map" },
             { label: "Generating summary" },
           ],
-          current: 3,
+          current: 4,
         }),
         React.createElement(ProjectCard, {
           name: map.projectName,
@@ -96,6 +108,36 @@ export const explainCommand = new Command("explain")
               files: Object.entries(map.scripts).slice(0, 5).map(([n, c]) => `${n}: ${c}`),
               title: "Scripts",
             })
+          : null,
+        map.packageManagers.length > 0
+          ? React.createElement(ContextFiles, {
+              files: map.packageManagers,
+              title: "Package Managers",
+            })
+          : null,
+        map.tests.scripts.length > 0 || map.tests.frameworks.length > 0 || map.tests.directories.length > 0
+          ? React.createElement(ContextFiles, {
+              files: [
+                ...map.tests.scripts.map((script) => `script: ${script}`),
+                ...map.tests.frameworks.map((framework) => `framework: ${framework}`),
+                ...map.tests.directories.map((dir) => `directory: ${dir}`),
+                ...map.tests.files.map((file) => `config: ${file}`),
+              ],
+              title: "Test Setup",
+            })
+          : null,
+        map.warnings.length > 0
+          ? React.createElement(ContextFiles, {
+              files: map.warnings.slice(0, 6).map((warning) => warning.message),
+              title: "Warnings",
+            })
+          : null,
+        !hunoInitialized
+          ? React.createElement(
+              Box,
+              { marginTop: 1 },
+              React.createElement(Text, { color: "yellow" }, "Run `huno init` to save this project map locally.")
+            )
           : null
       )
     );

@@ -1,6 +1,12 @@
 import { getProjectRoot } from "../utils/paths.js";
 import { HunoError, Result } from "../utils/errors.js";
 
+export type ProjectWarning = {
+  id: string;
+  message: string;
+  suggestion?: string;
+};
+
 export type ProjectMap = {
   version: string;
   projectName: string;
@@ -16,6 +22,21 @@ export type ProjectMap = {
   importantFiles: string[];
   directories: Record<string, string>;
   scripts: Record<string, string>;
+  docs: {
+    readme: boolean;
+    license: boolean;
+    envExample: boolean;
+  };
+  git: {
+    isRepository: boolean;
+  };
+  tests: {
+    directories: string[];
+    files: string[];
+    scripts: string[];
+    frameworks: string[];
+  };
+  warnings: ProjectWarning[];
 };
 
 export function emptyProjectMap(): ProjectMap {
@@ -34,6 +55,21 @@ export function emptyProjectMap(): ProjectMap {
     importantFiles: [],
     directories: {},
     scripts: {},
+    docs: {
+      readme: false,
+      license: false,
+      envExample: false,
+    },
+    git: {
+      isRepository: false,
+    },
+    tests: {
+      directories: [],
+      files: [],
+      scripts: [],
+      frameworks: [],
+    },
+    warnings: [],
   };
 }
 

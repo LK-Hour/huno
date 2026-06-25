@@ -18,7 +18,9 @@ const STEPS = [
 export const askCommand = new Command("ask")
   .description("Ask a question about your project.")
   .argument("<question>", "The question to ask")
-  .action(async (question: string) => {
+  .option("-p, --provider <provider>", "Provider to use for this request")
+  .option("-m, --model <model>", "Model to use for this request")
+  .action(async (question: string, options: { provider?: string; model?: string }) => {
     // Step 1: Building context
     renderUI(
       React.createElement(
@@ -64,7 +66,10 @@ export const askCommand = new Command("ask")
       )
     );
 
-    const providerResult = await getActiveProvider();
+    const providerResult = await getActiveProvider({
+      provider: options.provider,
+      model: options.model,
+    });
     if (!providerResult.ok) {
       renderUI(
         React.createElement(

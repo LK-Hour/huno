@@ -5,7 +5,12 @@ import chalk from "chalk";
 import { renderUI } from "./ui/renderer.js";
 import { Header, ReplPrompt, ContextFiles, ErrorBox } from "./ui/components/index.js";
 import { buildContext } from "./core/context.js";
-import { getActiveProvider } from "./providers/index.js";
+import { getActiveProvider, listProviderInfo } from "./providers/index.js";
+import {
+  configureModelInteractive,
+  configureProviderInteractive,
+  getCurrentProviderConfiguration,
+} from "./commands/providers.js";
 import { scanProject } from "./core/scanner.js";
 import { readHunoFile } from "./storage/huno-dir.js";
 import { parseProjectMap } from "./storage/project-map.js";
@@ -14,6 +19,21 @@ import { getProjectRoot } from "./utils/paths.js";
 import { HunoError } from "./utils/errors.js";
 
 const VERSION = "0.1.0";
+const SLASH_COMMANDS = [
+  { name: "/help", usage: "/help", description: "Show available slash commands" },
+  { name: "/ask", usage: "/ask <question>", description: "Ask a question about your project" },
+  { name: "/providers", usage: "/providers", description: "List supported providers" },
+  { name: "/configure", usage: "/configure", description: "Configure provider and model" },
+  { name: "/model", usage: "/model", description: "Show current provider/model configuration" },
+  { name: "/model change", usage: "/model change", description: "Change the configured model" },
+  { name: "/audit", usage: "/audit", description: "Run project audit" },
+  { name: "/explain", usage: "/explain", description: "Explain the project structure" },
+  { name: "/remember", usage: "/remember <text>", description: "Save a project memory" },
+  { name: "/recall", usage: "/recall <query>", description: "Search project memories" },
+  { name: "/context", usage: "/context", description: "Show context files" },
+  { name: "/clear", usage: "/clear", description: "Clear the screen" },
+  { name: "/exit", usage: "/exit", description: "Exit Huno" },
+] as const;
 
 function showHelp(): void {
   renderUI(
@@ -21,23 +41,89 @@ function showHelp(): void {
       Box,
       { flexDirection: "column", marginTop: 1 },
       React.createElement(Text, { bold: true, color: "white" }, "  Slash Commands:"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /help        Show this help message"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /ask <q>     Ask a question about your project"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /audit       Run project audit"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /explain     Explain the project structure"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /remember    Save a project memory"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /recall      Search project memories"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /context     Show project context files"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /clear       Clear the screen"),
-      React.createElement(Text, { color: "#DFE6E9" }, "    /exit        Exit Huno"),
-      React.createElement(Text, { color: "#636E72", marginTop: 1 }, "  Type any question to ask about your project.")
+      ...SLASH_COMMANDS.map((command) =>
+        React.createElement(
+          Text,
+          { key: command.usage, color: "#DFE6E9" },
+          `    ${command.usage.padEnd(18)} ${command.description}`
+        )
+      ),
+      React.createElement(
+        Box,
+        { marginTop: 1 },
+        React.createElement(Text, { color: "#636E72" }, "  Type any question to ask about your project. Type / to see command suggestions.")
+      )
     )
   );
 }
 
-function getContextFiles(): string[] {
-  const root = getProjectRoot();
-  const result = readHunoFile("project-map.json");
+function showProviders(): void {
+  const providers = listProviderInfo();
+
+  renderUI(
+    React.createElement(
+      Box,
+      { flexDirection: "column", marginTop: 1 },
+      React.createElement(Text, { bold: true, color: "white" }, "  Supported Providers"),
+      ...providers.flatMap((provider) => {
+        const rows = [
+          React.createElement(Text, { key: `${provider.name}-name`, color: "#00CEC9" }, `  ${provider.name}`),
+          React.createElement(Text, { key: `${provider.name}-model`, color: "#DFE6E9" }, `    default model: ${provider.defaultModel}`),
+          React.createElement(Text, { key: `${provider.name}-env`, color: "#DFE6E9" }, `    env: ${provider.envKeys.join(" or ") || "(none)"}`),
+        ];
+
+        if (provider.aliases.length > 0) {
+          rows.push(
+            React.createElement(Text, { key: `${provider.name}-aliases`, color: "#DFE6E9" }, `    aliases: ${provider.aliases.join(", ")}`)
+          );
+        }
+        if (provider.requiresAccountId) {
+          rows.push(
+            React.createElement(Text, { key: `${provider.name}-extra`, color: "#DFE6E9" }, "    extra: CLOUDFLARE_ACCOUNT_ID")
+          );
+        }
+
+        return rows;
+      }),
+      React.createElement(
+        Box,
+        { marginTop: 1 },
+        React.createElement(Text, { color: "#636E72" }, '  Example: /ask what is this project?  Use HUNO_PROVIDER or "huno ask --provider" outside the REPL.')
+      )
+    )
+  );
+}
+
+async function showModelStatus(): Promise<void> {
+  const result = await getCurrentProviderConfiguration();
+  if (!result.ok) {
+    renderUI(
+      React.createElement(ErrorBox, {
+        message: result.error.message,
+        hint: result.error.hint,
+      })
+    );
+    return;
+  }
+
+  renderUI(
+    React.createElement(
+      Box,
+      { flexDirection: "column", marginTop: 1 },
+      React.createElement(Text, { bold: true, color: "white" }, "  Current Model Configuration"),
+      React.createElement(Text, { color: "#00CEC9" }, `  provider: ${result.data.provider}`),
+      React.createElement(Text, { color: "#DFE6E9" }, `  model: ${result.data.model}`),
+      React.createElement(
+        Box,
+        { marginTop: 1 },
+        React.createElement(Text, { color: "#636E72" }, "  Use /model change to pick a different model for the current provider.")
+      )
+    )
+  );
+}
+
+async function getContextFiles(): Promise<string[]> {
+  const result = await readHunoFile("project-map.json");
   if (result.ok) {
     try {
       const map = parseProjectMap(result.data);
@@ -237,16 +323,20 @@ export const replCommand = new Command("repl").description("Enter interactive mo
 export async function runRepl(): Promise<void> {
   const root = getProjectRoot();
   const projectName = root.split("/").pop() || "project";
-  const contextFiles = getContextFiles();
+  const contextFiles = await getContextFiles();
 
   renderUI(
     React.createElement(
       Box,
       { flexDirection: "column" },
-      React.createElement(Header, { tagline: `Project: ${projectName} · v${VERSION}` }),
+      React.createElement(Header, { tagline: `Project: ${projectName} · v${VERSION}`, creator: "LK H'our" }),
       contextFiles.length > 0 &&
         React.createElement(ContextFiles, { files: contextFiles, title: "Context Files" }),
-      React.createElement(Text, { color: "#636E72", marginTop: 1 }, '  Type a question or /help for commands. "/exit" to quit.\n')
+      React.createElement(
+        Box,
+        { marginTop: 1 },
+        React.createElement(Text, { color: "#636E72" }, '  Type a question or /help for commands. "/exit" to quit.\n')
+      )
     )
   );
 
@@ -263,6 +353,90 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
   });
 
   let isRunning = false;
+  let isClosed = false;
+  let blinkVisible = true;
+  const commandSuggestions = (input: string) => {
+    if (!input.startsWith("/")) {
+      return [];
+    }
+    const query = input.toLowerCase();
+    return SLASH_COMMANDS.filter((command) => command.name.startsWith(query)).slice(0, 6);
+  };
+
+  const clearOverlay = (): void => {
+    if (!process.stdout.isTTY || isClosed) {
+      return;
+    }
+
+    const line = rl.line ?? "";
+    const cursor = (rl as unknown as { cursor?: number }).cursor ?? line.length;
+    process.stdout.write("\x1b7");
+    const moveToEnd = Math.max(0, line.length - cursor);
+    if (moveToEnd > 0) {
+      readline.moveCursor(process.stdout, moveToEnd, 0);
+    }
+    readline.clearScreenDown(process.stdout);
+    process.stdout.write("\x1b8");
+  };
+
+  const renderOverlay = (): void => {
+    if (!process.stdout.isTTY || isClosed || isRunning) {
+      return;
+    }
+
+    const line = rl.line ?? "";
+    const cursor = Math.max(0, Math.min((rl as unknown as { cursor?: number }).cursor ?? line.length, line.length));
+    const before = line.slice(0, cursor);
+    const after = line.slice(cursor);
+    const suggestions = commandSuggestions(line.trim());
+    const lines = [
+      `${chalk.dim("  typing")} ${chalk.hex("#00CEC9")("> ")}${before}${blinkVisible ? chalk.white("|") : chalk.dim("|")}${after}`,
+    ];
+
+    if (suggestions.length > 0) {
+      lines.push(chalk.dim("  commands"));
+      suggestions.forEach((command) => {
+        lines.push(`  ${chalk.hex("#74B9FF")(command.usage)} ${chalk.dim(command.description)}`);
+      });
+    }
+
+    process.stdout.write("\x1b7");
+    const moveToEnd = Math.max(0, line.length - cursor);
+    if (moveToEnd > 0) {
+      readline.moveCursor(process.stdout, moveToEnd, 0);
+    }
+    readline.clearScreenDown(process.stdout);
+    process.stdout.write(`\n${lines.join("\n")}`);
+    process.stdout.write("\x1b8");
+  };
+
+  const blinkTimer = setInterval(() => {
+    blinkVisible = !blinkVisible;
+    renderOverlay();
+  }, 500);
+
+  const onKeypress = (): void => {
+    setImmediate(renderOverlay);
+  };
+
+  readline.emitKeypressEvents(process.stdin);
+  process.stdin.on("keypress", onKeypress);
+
+  const runInteractiveAction = async (
+    action: () => Promise<void>
+  ): Promise<void> => {
+    isRunning = true;
+    clearOverlay();
+    rl.pause();
+    try {
+      await action();
+    } finally {
+      rl.resume();
+      isRunning = false;
+      rl.prompt();
+      renderOverlay();
+    }
+  };
 
   rl.on("line", async (line: string) => {
     const input = line.trim();
@@ -271,6 +445,7 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
 
     if (!input) {
       rl.prompt();
+      renderOverlay();
       return;
     }
 
@@ -284,92 +459,180 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     }
 
     if (input === "/clear") {
+      clearOverlay();
       console.clear();
       rl.prompt();
+      renderOverlay();
       return;
     }
 
     if (input === "/help") {
+      clearOverlay();
       showHelp();
       rl.prompt();
+      renderOverlay();
+      return;
+    }
+
+    if (input === "/providers" || input === "providers") {
+      clearOverlay();
+      showProviders();
+      rl.prompt();
+      renderOverlay();
+      return;
+    }
+
+    if (input === "/configure") {
+      await runInteractiveAction(async () => {
+        const result = await configureProviderInteractive();
+        if (!result.ok) {
+          renderUI(
+            React.createElement(ErrorBox, {
+              message: result.error.message,
+              hint: result.error.hint,
+            })
+          );
+          return;
+        }
+
+        renderUI(
+          React.createElement(
+            Box,
+            { flexDirection: "column", marginTop: 1 },
+            React.createElement(Text, { color: "#00B894" }, `  ✓ Configured provider: ${result.data.provider}`),
+            React.createElement(Text, { color: "#DFE6E9" }, `  Default model: ${result.data.model}`)
+          )
+        );
+      });
+      return;
+    }
+
+    if (input === "/model") {
+      clearOverlay();
+      await showModelStatus();
+      rl.prompt();
+      renderOverlay();
+      return;
+    }
+
+    if (input === "/model change" || input === "/model set") {
+      await runInteractiveAction(async () => {
+        const result = await configureModelInteractive();
+        if (!result.ok) {
+          renderUI(
+            React.createElement(ErrorBox, {
+              message: result.error.message,
+              hint: result.error.hint,
+            })
+          );
+          return;
+        }
+
+        renderUI(
+          React.createElement(
+            Box,
+            { flexDirection: "column", marginTop: 1 },
+            React.createElement(Text, { color: "#00B894" }, `  ✓ Updated model for ${result.data.provider}`),
+            React.createElement(Text, { color: "#DFE6E9" }, `  Model: ${result.data.model}`)
+          )
+        );
+      });
       return;
     }
 
     if (input === "/context") {
+      clearOverlay();
       renderUI(
         React.createElement(ContextFiles, { files: contextFiles, title: "Project Context" })
       );
       rl.prompt();
+      renderOverlay();
       return;
     }
 
     if (input === "/audit") {
-      isRunning = true;
-      rl.prompt();
-      await runAudit();
-      isRunning = false;
-      rl.prompt();
+      await runInteractiveAction(async () => {
+        await runAudit();
+      });
       return;
     }
 
     if (input === "/explain") {
-      isRunning = true;
-      rl.prompt();
-      await runExplain();
-      isRunning = false;
-      rl.prompt();
+      await runInteractiveAction(async () => {
+        await runExplain();
+      });
       return;
     }
 
     if (input.startsWith("/remember ")) {
       const text = input.slice(10).trim();
       if (!text) {
+        clearOverlay();
         renderUI(React.createElement(Text, { color: "#E17055" }, "  Usage: /remember <text>"));
         rl.prompt();
+        renderOverlay();
         return;
       }
-      isRunning = true;
-      rl.prompt();
-      await runRemember(text);
-      isRunning = false;
-      rl.prompt();
+      await runInteractiveAction(async () => {
+        await runRemember(text);
+      });
       return;
     }
 
     if (input.startsWith("/recall ")) {
       const query = input.slice(8).trim();
       if (!query) {
+        clearOverlay();
         renderUI(React.createElement(Text, { color: "#E17055" }, "  Usage: /recall <query>"));
         rl.prompt();
+        renderOverlay();
         return;
       }
-      isRunning = true;
-      rl.prompt();
-      await runRecall(query);
-      isRunning = false;
-      rl.prompt();
+      await runInteractiveAction(async () => {
+        await runRecall(query);
+      });
+      return;
+    }
+
+    if (input.startsWith("/ask ")) {
+      const question = input.slice(5).trim();
+      if (!question) {
+        clearOverlay();
+        renderUI(React.createElement(Text, { color: "#E17055" }, "  Usage: /ask <question>"));
+        rl.prompt();
+        renderOverlay();
+        return;
+      }
+      await runInteractiveAction(async () => {
+        await runAsk(question);
+      });
       return;
     }
 
     // Default: treat as ask question
-    isRunning = true;
-    rl.prompt();
-    await runAsk(input);
-    isRunning = false;
-    rl.prompt();
+    await runInteractiveAction(async () => {
+      await runAsk(input);
+    });
   });
 
   rl.on("close", () => {
+    isClosed = true;
+    clearInterval(blinkTimer);
+    process.stdin.off("keypress", onKeypress);
     renderUI(React.createElement(Text, { color: "#636E72" }, "\n  Goodbye!\n"));
     process.exit(0);
   });
 
   // Handle Ctrl+C
   process.on("SIGINT", () => {
+    isClosed = true;
+    clearInterval(blinkTimer);
+    process.stdin.off("keypress", onKeypress);
     renderUI(React.createElement(Text, { color: "#636E72" }, "\n  Goodbye! 👋\n"));
     rl.close();
     process.exit(0);
   });
 
   rl.prompt();
+  renderOverlay();
 }

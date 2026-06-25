@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import "dotenv/config";
 import { Command } from "commander";
 import chalk from "chalk";
 
@@ -9,6 +10,7 @@ import { rememberCommand } from "./commands/remember.js";
 import { recallCommand } from "./commands/recall.js";
 import { askCommand } from "./commands/ask.js";
 import { auditCommand } from "./commands/audit.js";
+import { providersCommand } from "./commands/providers.js";
 import { runRepl } from "./repl.js";
 
 const program = new Command();
@@ -24,6 +26,7 @@ program.addCommand(rememberCommand);
 program.addCommand(recallCommand);
 program.addCommand(auditCommand);
 program.addCommand(askCommand);
+program.addCommand(providersCommand);
 
 // If no arguments given, launch interactive REPL
 if (process.argv.length <= 2) {

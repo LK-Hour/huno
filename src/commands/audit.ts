@@ -5,9 +5,10 @@ import React from "react";
 import { scanProject } from "../core/scanner.js";
 import { type Result } from "../utils/errors.js";
 import { type AuditIssue, type AuditReport, type AuditSeverity } from "../types/audit.js";
-import { Header, AuditTable, ProgressSteps, WarningBox, ErrorBox, type AuditFinding } from "../ui/components/index.js";
+import { Header, AuditTable, ProgressSteps, WarningBox, ErrorBox } from "../ui/components/index.js";
 import { renderUI } from "../ui/renderer.js";
 import { Box, Text } from "ink";
+import type { AuditFinding } from "../ui/components/AuditTable.js";
 
 const LARGE_FILE_THRESHOLD = 500 * 1024; // 500KB
 const SECRET_PATTERNS = [
