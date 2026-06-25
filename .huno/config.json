@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "defaultProvider": "openrouter",
-  "defaultModel": "nousresearch/hermes-3-llama-3.1-405b:free",
+  "defaultProvider": "ollama",
+  "defaultModel": "llama3.2",
   "permissions": {
     "allowRead": true,
     "allowWrite": "ask",

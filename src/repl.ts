@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { spawn } from "child_process";
+import { Writable } from "stream";
 import React from "react";
 import { Box, Text } from "ink";
 import chalk from "chalk";
@@ -341,17 +342,34 @@ export async function runRepl(): Promise<void> {
 
 async function startReplLoop(projectName: string, contextFiles: string[]): Promise<void> {
   const readline = await import("readline");
+  const hiddenOutput = new Writable({
+    write(_chunk, _encoding, callback) {
+      callback();
+    },
+  }) as Writable & {
+    isTTY: boolean;
+    columns?: number;
+    rows?: number;
+    getColorDepth?: () => number;
+  };
+  hiddenOutput.isTTY = true;
+  hiddenOutput.columns = process.stdout.columns;
+  hiddenOutput.rows = process.stdout.rows;
+  hiddenOutput.getColorDepth = () =>
+    typeof process.stdout.getColorDepth === "function" ? process.stdout.getColorDepth() : 8;
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
+    output: hiddenOutput as typeof process.stdout,
     prompt: chalk.hex("#00CEC9")(`> `),
     terminal: true,
   });
+  (rl as unknown as { _writeToOutput?: (value: string) => void })._writeToOutput = () => {};
 
   let isRunning = false;
   let isClosed = false;
   let blinkVisible = true;
   let shouldExitOnClose = true;
+  let selectedSuggestionIndex = 0;
   const commandSuggestions = (input: string) => {
     if (!input.startsWith("/")) {
       return [];
@@ -386,14 +404,21 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     const before = line.slice(0, cursor);
     const after = line.slice(cursor);
     const suggestions = commandSuggestions(line.trim());
+    if (selectedSuggestionIndex >= suggestions.length) {
+      selectedSuggestionIndex = 0;
+    }
     const lines = [
       `${chalk.dim("  typing")} ${chalk.hex("#00CEC9")("> ")}${before}${blinkVisible ? chalk.white("|") : chalk.dim("|")}${after}`,
     ];
 
     if (suggestions.length > 0) {
       lines.push(chalk.dim("  commands"));
-      suggestions.forEach((command) => {
-        lines.push(`  ${chalk.hex("#74B9FF")(command.usage)} ${chalk.dim(command.description)}`);
+      suggestions.forEach((command, index) => {
+        const isSelected = index === selectedSuggestionIndex;
+        const prefix = isSelected ? chalk.green(">") : " ";
+        const usage = isSelected ? chalk.bold(command.usage) : chalk.hex("#74B9FF")(command.usage);
+        const description = isSelected ? command.description : chalk.dim(command.description);
+        lines.push(` ${prefix} ${usage} ${description}`);
       });
     }
 
@@ -415,9 +440,55 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
   const onKeypress = (): void => {
     setImmediate(renderOverlay);
   };
+  const onSuggestionKeypress = (_input: string, key: { name?: string }): void => {
+    if (isClosed || isRunning) {
+      return;
+    }
+
+    const suggestions = commandSuggestions((rl.line ?? "").trim());
+    if (suggestions.length === 0) {
+      selectedSuggestionIndex = 0;
+      return;
+    }
+
+    if (key.name === "up") {
+      selectedSuggestionIndex =
+        selectedSuggestionIndex === 0 ? suggestions.length - 1 : selectedSuggestionIndex - 1;
+      renderOverlay();
+      return;
+    }
+
+    if (key.name === "down") {
+      selectedSuggestionIndex =
+        selectedSuggestionIndex === suggestions.length - 1 ? 0 : selectedSuggestionIndex + 1;
+      renderOverlay();
+      return;
+    }
+
+    if (key.name === "tab") {
+      const selectedSuggestion = suggestions[selectedSuggestionIndex];
+      if (selectedSuggestion) {
+        setInputValue(selectedSuggestion.name);
+      }
+      return;
+    }
+
+    if (key.name !== "left" && key.name !== "right") {
+      selectedSuggestionIndex = 0;
+    }
+  };
+
+  const setInputValue = (value: string): void => {
+    const internalRl = rl as unknown as { line: string; cursor?: number };
+    internalRl.line = value;
+    internalRl.cursor = value.length;
+    selectedSuggestionIndex = 0;
+    renderOverlay();
+  };
 
   readline.emitKeypressEvents(process.stdin);
   process.stdin.on("keypress", onKeypress);
+  process.stdin.on("keypress", onSuggestionKeypress);
 
   const runInteractiveAction = async (
     action: () => Promise<void>
@@ -440,6 +511,7 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     isClosed = true;
     clearInterval(blinkTimer);
     process.stdin.off("keypress", onKeypress);
+    process.stdin.off("keypress", onSuggestionKeypress);
     clearOverlay();
     rl.close();
 
@@ -474,15 +546,44 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
       process.exit(exitCode);
     }
 
-    console.log();
-    console.log(chalk.dim("Restart Huno to continue using the REPL."));
+    const restartCommand =
+      entrypoint.endsWith(".ts")
+        ? {
+            bin: "npx",
+            args: ["tsx", entrypoint],
+          }
+        : {
+            bin: process.execPath,
+            args: [entrypoint],
+          };
+
+    const restartChild = spawn(restartCommand.bin, restartCommand.args, {
+      cwd: process.cwd(),
+      stdio: "inherit",
+    });
+    restartChild.on("error", () => {
+      process.exit(1);
+    });
     process.exit(0);
   };
 
   rl.on("line", async (line: string) => {
     const input = line.trim();
+    const suggestions = commandSuggestions(input);
+    const selectedSuggestion = suggestions[selectedSuggestionIndex];
 
     if (isRunning) return;
+
+    if (
+      input.startsWith("/") &&
+      suggestions.length > 0 &&
+      selectedSuggestion &&
+      !SLASH_COMMANDS.some((command) => command.name === input || command.usage === input)
+    ) {
+      rl.prompt();
+      setInputValue(selectedSuggestion.name);
+      return;
+    }
 
     if (!input) {
       rl.prompt();
@@ -620,6 +721,7 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     isClosed = true;
     clearInterval(blinkTimer);
     process.stdin.off("keypress", onKeypress);
+    process.stdin.off("keypress", onSuggestionKeypress);
     process.off("SIGINT", onSigint);
     renderUI(React.createElement(Text, { color: "#636E72" }, "\n  Goodbye! 👋\n"));
     rl.close();
@@ -630,6 +732,7 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     isClosed = true;
     clearInterval(blinkTimer);
     process.stdin.off("keypress", onKeypress);
+    process.stdin.off("keypress", onSuggestionKeypress);
     process.off("SIGINT", onSigint);
     if (!shouldExitOnClose) {
       return;
