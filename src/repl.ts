@@ -507,13 +507,11 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
   };
 
   const runSubcommand = async (args: string[]): Promise<void> => {
-    shouldExitOnClose = false;
-    isClosed = true;
-    clearInterval(blinkTimer);
+    isRunning = true;
+    clearOverlay();
+    rl.pause();
     process.stdin.off("keypress", onKeypress);
     process.stdin.off("keypress", onSuggestionKeypress);
-    clearOverlay();
-    rl.close();
 
     const entrypoint = process.argv[1];
     const command =
@@ -546,25 +544,21 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
       process.exit(exitCode);
     }
 
-    const restartCommand =
-      entrypoint.endsWith(".ts")
-        ? {
-            bin: "npx",
-            args: ["tsx", entrypoint],
-          }
-        : {
-            bin: process.execPath,
-            args: [entrypoint],
-          };
-
-    const restartChild = spawn(restartCommand.bin, restartCommand.args, {
-      cwd: process.cwd(),
-      stdio: "inherit",
-    });
-    restartChild.on("error", () => {
-      process.exit(1);
-    });
-    process.exit(0);
+    process.stdin.on("keypress", onKeypress);
+    process.stdin.on("keypress", onSuggestionKeypress);
+    rl.resume();
+    isRunning = false;
+    isClosed = false;
+    selectedSuggestionIndex = 0;
+    const internalRl = rl as unknown as { line: string; cursor?: number };
+    internalRl.line = "";
+    internalRl.cursor = 0;
+    if (process.stdout.isTTY) {
+      process.stdout.write("\n");
+      process.stdout.write("\x1b[?25l");
+    }
+    rl.prompt();
+    renderOverlay();
   };
 
   rl.on("line", async (line: string) => {
