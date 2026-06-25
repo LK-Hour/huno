@@ -165,7 +165,11 @@ export async function configureModelInteractive(): Promise<Result<ProviderConfig
     return current;
   }
 
-  const providerInfo = listProviderInfo().find((provider) => provider.name === current.data.provider);
+  const providerInfo = listProviderInfo().find(
+    (provider) =>
+      provider.name === current.data.provider ||
+      provider.aliases.includes(current.data.provider)
+  );
   if (!providerInfo) {
     return {
       ok: false,
@@ -198,19 +202,13 @@ export async function configureModelInteractive(): Promise<Result<ProviderConfig
     };
   }
 
-  const cloudflareAccountId =
-    providerInfo.requiresAccountId
-      ? (await resolveCloudflareAccountId()).data
-      : undefined;
-
-  if (providerInfo.requiresAccountId && !cloudflareAccountId) {
-    return {
-      ok: false,
-      error: new HunoError(
-        "CLOUDFLARE_ACCOUNT_ID is required for Cloudflare.",
-        "PROVIDER_ACCOUNT_ID_MISSING"
-      ),
-    };
+  let cloudflareAccountId: string | undefined;
+  if (providerInfo.requiresAccountId) {
+    const accountIdResult = await resolveCloudflareAccountId();
+    if (!accountIdResult.ok) {
+      return accountIdResult;
+    }
+    cloudflareAccountId = accountIdResult.data;
   }
 
   const modelResult = await fetchProviderModels({
