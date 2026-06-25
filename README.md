@@ -1,6 +1,7 @@
 # Huno
-![Huno Profile](assets/huno_profile.svg)
-
+<p align="center">
+  <img src="assets/huno_profile_256px.svg" width="200" alt="Huno Profile">
+</p>
 > **Who knows your codebase? Huno knows.**
 
 Huno is a project-aware AI developer tool designed to understand, remember, inspect, document, and eventually operate across your software projects from the terminal.
