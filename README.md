@@ -1,4 +1,5 @@
 # Huno
+![Huno Profile](assets/huno_profile_48px.svg)
 
 > **Who knows your codebase? Huno knows.**
 

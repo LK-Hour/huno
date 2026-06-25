@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { spawn } from "child_process";
 import React from "react";
 import { Box, Text } from "ink";
 import chalk from "chalk";
@@ -6,17 +7,12 @@ import { renderUI } from "./ui/renderer.js";
 import { Header, ReplPrompt, ContextFiles, ErrorBox } from "./ui/components/index.js";
 import { buildContext } from "./core/context.js";
 import { getActiveProvider, listProviderInfo } from "./providers/index.js";
-import {
-  configureModelInteractive,
-  configureProviderInteractive,
-  getCurrentProviderConfiguration,
-} from "./commands/providers.js";
+import { getCurrentProviderConfiguration } from "./commands/providers.js";
 import { scanProject } from "./core/scanner.js";
 import { readHunoFile } from "./storage/huno-dir.js";
 import { parseProjectMap } from "./storage/project-map.js";
 import { appendMemory, readMemoryFile, parseMemoryEntries, searchMemory } from "./storage/memory-file.js";
 import { getProjectRoot } from "./utils/paths.js";
-import { HunoError } from "./utils/errors.js";
 
 const VERSION = "0.1.0";
 const SLASH_COMMANDS = [
@@ -355,6 +351,7 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
   let isRunning = false;
   let isClosed = false;
   let blinkVisible = true;
+  let shouldExitOnClose = true;
   const commandSuggestions = (input: string) => {
     if (!input.startsWith("/")) {
       return [];
@@ -438,6 +435,50 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     }
   };
 
+  const runSubcommand = async (args: string[]): Promise<void> => {
+    shouldExitOnClose = false;
+    isClosed = true;
+    clearInterval(blinkTimer);
+    process.stdin.off("keypress", onKeypress);
+    clearOverlay();
+    rl.close();
+
+    const entrypoint = process.argv[1];
+    const command =
+      entrypoint.endsWith(".ts")
+        ? {
+            bin: "npx",
+            args: ["tsx", entrypoint, ...args],
+          }
+        : {
+            bin: process.execPath,
+            args: [entrypoint, ...args],
+          };
+
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      const child = spawn(command.bin, command.args, {
+        cwd: process.cwd(),
+        stdio: "inherit",
+      });
+      child.on("error", reject);
+      child.on("close", (code) => resolve(code ?? 1));
+    });
+
+    if (exitCode !== 0) {
+      renderUI(
+        React.createElement(ErrorBox, {
+          message: `Command failed: huno ${args.join(" ")}`,
+          hint: `The subprocess exited with code ${exitCode}.`,
+        })
+      );
+      process.exit(exitCode);
+    }
+
+    console.log();
+    console.log(chalk.dim("Restart Huno to continue using the REPL."));
+    process.exit(0);
+  };
+
   rl.on("line", async (line: string) => {
     const input = line.trim();
 
@@ -483,27 +524,7 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     }
 
     if (input === "/configure") {
-      await runInteractiveAction(async () => {
-        const result = await configureProviderInteractive();
-        if (!result.ok) {
-          renderUI(
-            React.createElement(ErrorBox, {
-              message: result.error.message,
-              hint: result.error.hint,
-            })
-          );
-          return;
-        }
-
-        renderUI(
-          React.createElement(
-            Box,
-            { flexDirection: "column", marginTop: 1 },
-            React.createElement(Text, { color: "#00B894" }, `  ✓ Configured provider: ${result.data.provider}`),
-            React.createElement(Text, { color: "#DFE6E9" }, `  Default model: ${result.data.model}`)
-          )
-        );
-      });
+      await runSubcommand(["providers", "configure"]);
       return;
     }
 
@@ -516,27 +537,7 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     }
 
     if (input === "/model change" || input === "/model set") {
-      await runInteractiveAction(async () => {
-        const result = await configureModelInteractive();
-        if (!result.ok) {
-          renderUI(
-            React.createElement(ErrorBox, {
-              message: result.error.message,
-              hint: result.error.hint,
-            })
-          );
-          return;
-        }
-
-        renderUI(
-          React.createElement(
-            Box,
-            { flexDirection: "column", marginTop: 1 },
-            React.createElement(Text, { color: "#00B894" }, `  ✓ Updated model for ${result.data.provider}`),
-            React.createElement(Text, { color: "#DFE6E9" }, `  Model: ${result.data.model}`)
-          )
-        );
-      });
+      await runSubcommand(["model", "change"]);
       return;
     }
 
@@ -615,23 +616,30 @@ async function startReplLoop(projectName: string, contextFiles: string[]): Promi
     });
   });
 
+  const onSigint = (): void => {
+    isClosed = true;
+    clearInterval(blinkTimer);
+    process.stdin.off("keypress", onKeypress);
+    process.off("SIGINT", onSigint);
+    renderUI(React.createElement(Text, { color: "#636E72" }, "\n  Goodbye! 👋\n"));
+    rl.close();
+    process.exit(0);
+  };
+
   rl.on("close", () => {
     isClosed = true;
     clearInterval(blinkTimer);
     process.stdin.off("keypress", onKeypress);
+    process.off("SIGINT", onSigint);
+    if (!shouldExitOnClose) {
+      return;
+    }
     renderUI(React.createElement(Text, { color: "#636E72" }, "\n  Goodbye!\n"));
     process.exit(0);
   });
 
   // Handle Ctrl+C
-  process.on("SIGINT", () => {
-    isClosed = true;
-    clearInterval(blinkTimer);
-    process.stdin.off("keypress", onKeypress);
-    renderUI(React.createElement(Text, { color: "#636E72" }, "\n  Goodbye! 👋\n"));
-    rl.close();
-    process.exit(0);
-  });
+  process.on("SIGINT", onSigint);
 
   rl.prompt();
   renderOverlay();
