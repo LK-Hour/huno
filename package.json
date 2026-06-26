@@ -1,6 +1,6 @@
 {
   "name": "@lk-hour/huno",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "AI-powered project-aware developer assistant. Huno knows your codebase.",
   "type": "module",
   "icon": "assets/huno_profile_256px.ico",
