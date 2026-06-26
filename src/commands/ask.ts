@@ -3,10 +3,12 @@ import React from "react";
 import { Box, Text } from "ink";
 import { buildContext } from "../core/context.js";
 import { getActiveProvider } from "../providers/index.js";
-import { Header, ProgressSteps, ContextFiles, ErrorBox } from "../ui/components/index.js";
+import { createStreamingProvider } from "../providers/chat.js";
 import { renderUI } from "../ui/renderer.js";
-import type { ContextBuildResult } from "../types/context.js";
-import type { Provider } from "../providers/base.js";
+import { Header, ProgressSteps, ContextFiles, ErrorBox } from "../ui/components/index.js";
+import { runConversation } from "../core/conversation.js";
+import { allTools } from "../tools/index.js";
+import { loadConfig, defaultConfig } from "../core/config.js";
 
 const STEPS = [
   { label: "Building context" },
@@ -50,9 +52,7 @@ export const askCommand = new Command("ask")
       return;
     }
 
-    const context: ContextBuildResult = contextResult.data;
-
-    // Collect context file paths
+    const context = contextResult.data;
     const contextPaths: string[] = context.files.relevantFiles.map((f) => f.path);
 
     // Step 2: Selecting provider
@@ -89,9 +89,9 @@ export const askCommand = new Command("ask")
       return;
     }
 
-    const provider: Provider = providerResult.data;
+    const baseProvider = providerResult.data;
 
-    // Step 3: Thinking
+    // Show provider info
     renderUI(
       React.createElement(
         Box,
@@ -102,59 +102,24 @@ export const askCommand = new Command("ask")
         React.createElement(
           Box,
           { marginTop: 1 },
-          React.createElement(Text, { dimColor: true }, `Provider: ${provider.name} (${provider.model})`)
+          React.createElement(Text, { dimColor: true }, `Provider: ${baseProvider.name} (${baseProvider.model})`)
         )
       )
     );
 
+    // Create streaming provider with tools
+    const configResult = await loadConfig();
+    const config = configResult.ok ? configResult.data : defaultConfig();
+    const streamingProvider = createStreamingProvider(baseProvider as any, config);
     const fullPrompt = buildFullPrompt(context);
+    const tools = allTools();
 
-    const result = await provider.complete(fullPrompt, context.systemPrompt);
-
-    if (!result.ok) {
-      renderUI(
-        React.createElement(
-          Box,
-          { flexDirection: "column" },
-          React.createElement(Header, { tagline: "Project Q&A" }),
-          React.createElement(ProgressSteps, { steps: STEPS, current: 2 }),
-          React.createElement(ContextFiles, { files: contextPaths }),
-          React.createElement(
-            Box,
-            { marginTop: 1 },
-            React.createElement(Text, { dimColor: true }, `Provider: ${provider.name} (${provider.model})`)
-          ),
-          React.createElement(ErrorBox, {
-            message: result.error.message,
-            code: result.error.code,
-            hint: result.error.hint,
-          })
-        )
-      );
-      setTimeout(() => process.exit(1), 100);
-      return;
-    }
-
-    // Step 4: Answering
-    renderUI(
-      React.createElement(
-        Box,
-        { flexDirection: "column" },
-        React.createElement(Header, { tagline: "Project Q&A" }),
-        React.createElement(ProgressSteps, { steps: STEPS, current: 3 }),
-        React.createElement(ContextFiles, { files: contextPaths }),
-        React.createElement(
-          Box,
-          { marginTop: 1 },
-          React.createElement(Text, { dimColor: true }, `Provider: ${provider.name} (${provider.model})`)
-        ),
-        React.createElement(
-          Box,
-          { borderStyle: "round", paddingX: 1, marginTop: 1 },
-          React.createElement(Text, null, result.data)
-        )
-      )
-    );
+    // Run conversation (streams output, executes tools)
+    await runConversation(fullPrompt, [], {
+      provider: streamingProvider,
+      tools,
+      maxTurns: 20,
+    });
 
     setTimeout(() => process.exit(0), 100);
   });

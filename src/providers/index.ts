@@ -152,8 +152,20 @@ export async function getActiveProvider(
   }
 
   const config = configResult.ok ? configResult.data : defaultConfig();
-  const providerName = options.provider || process.env.HUNO_PROVIDER || config.defaultProvider || "ollama";
-  const model = options.model || process.env.HUNO_MODEL || config.defaultModel;
+  // Priority: CLI options (--provider/--model) > .huno/config.json > env vars
+  const providerName = options.provider || config.defaultProvider || process.env.HUNO_PROVIDER;
+  const model = options.model || config.defaultModel || process.env.HUNO_MODEL;
+
+  if (!providerName) {
+    return {
+      ok: false,
+      error: new HunoError(
+        "No provider configured.",
+        "PROVIDER_NOT_CONFIGURED",
+        "Run `huno providers configure` or set HUNO_PROVIDER in .env or .huno/config.json."
+      ),
+    };
+  }
 
   if (providerName === "ollama") {
     return { ok: true, data: new OllamaProvider(model) };
@@ -201,7 +213,7 @@ export async function getActiveProvider(
   };
 }
 
-function findProviderDefinition(name: string): ProviderDefinition | undefined {
+export function findProviderDefinition(name: string): ProviderDefinition | undefined {
   const normalized = name.toLowerCase();
   return PROVIDERS.find(
     (provider) =>
@@ -211,21 +223,20 @@ function findProviderDefinition(name: string): ProviderDefinition | undefined {
 }
 
 function resolveApiKey(config: Config, provider: ProviderDefinition): string | null {
+  // Priority 1: Literal key in config.apiKeys
   const configured = config.apiKeys?.[provider.configKey];
-  if (configured) {
-    const envValue = process.env[configured];
-    if (envValue) return envValue;
+  if (configured) return configured;
 
-    // Config values normally name environment variables. Only treat a value as
-    // a literal key when it does not look like an env var name.
-    if (!/^[A-Z][A-Z0-9_]*$/.test(configured)) {
-      return configured;
-    }
-  }
-
+  // Priority 2: Environment variable keys listed in provider definition
   for (const envKey of provider.envKeys) {
     const value = process.env[envKey];
     if (value) return value;
+  }
+
+  // Priority 3: Legacy — config value is an env var name (backward compat)
+  if (configured && /^[A-Z][A-Z0-9_]*$/.test(configured)) {
+    const envValue = process.env[configured];
+    if (envValue) return envValue;
   }
 
   return null;

@@ -1,14 +1,45 @@
 {
-  "name": "huno",
+  "name": "@lk-hour/huno",
   "version": "0.1.0",
+  "description": "AI-powered project-aware developer assistant. Huno knows your codebase.",
   "type": "module",
   "icon": "assets/huno_profile_256px.ico",
-  "bin": {
-    "huno": "./dist/index.js"
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
   },
+  "bin": {
+    "huno": "dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LK-Hour/huno.git"
+  },
+  "homepage": "https://github.com/LK-Hour/huno#readme",
+  "bugs": {
+    "url": "https://github.com/LK-Hour/huno/issues"
+  },
+  "keywords": [
+    "cli",
+    "ai",
+    "developer-tools",
+    "project-aware",
+    "terminal",
+    "assistant",
+    "codebase",
+    "memory",
+    "audit",
+    "documentation"
+  ],
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -16,7 +47,10 @@
     "chalk": "^5.3.0",
     "commander": "^11.1.0",
     "dotenv": "^17.4.2",
+    "figures": "^6.1.0",
     "ink": "^7.1.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
     "openai": "^4.73.0",
     "react": "^19.2.7",
     "zod": "^3.22.4"

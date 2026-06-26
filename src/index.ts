@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 
+//  █████   █████ █████  █████ ██████   █████    ███████   
+// ░░███   ░░███ ░░███  ░░███ ░░██████ ░░███   ███░░░░░███ 
+//  ░███    ░███  ░███   ░███  ░███░███ ░███  ███     ░░███
+//  ░███████████  ░███   ░███  ░███░░███░███ ░███      ░███
+//  ░███░░░░░███  ░███   ░███  ░███ ░░██████ ░███      ░███
+//  ░███    ░███  ░███   ░███  ░███  ░░█████ ░░███     ███ 
+//  █████   █████ ░░████████   █████  ░░█████ ░░░███████░  
+// ░░░░░   ░░░░░   ░░░░░░░░   ░░░░░    ░░░░░    ░░░░░░░    
+
+
 import "dotenv/config";
 import { Command } from "commander";
 import chalk from "chalk";
@@ -8,8 +18,10 @@ import { initCommand } from "./commands/init.js";
 import { explainCommand } from "./commands/explain.js";
 import { rememberCommand } from "./commands/remember.js";
 import { recallCommand } from "./commands/recall.js";
+import { docCommand } from "./commands/doc.js";
 import { askCommand } from "./commands/ask.js";
 import { auditCommand } from "./commands/audit.js";
+import { lintCommand } from "./commands/lint.js";
 import { providersCommand } from "./commands/providers.js";
 import { modelCommand } from "./commands/model.js";
 import { runRepl } from "./repl.js";
@@ -25,7 +37,9 @@ program.addCommand(initCommand);
 program.addCommand(explainCommand);
 program.addCommand(rememberCommand);
 program.addCommand(recallCommand);
+program.addCommand(docCommand);
 program.addCommand(auditCommand);
+program.addCommand(lintCommand);
 program.addCommand(askCommand);
 program.addCommand(providersCommand);
 program.addCommand(modelCommand);

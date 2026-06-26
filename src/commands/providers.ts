@@ -20,40 +20,54 @@ export type ProviderConfigurationSummary = {
 
 export const providersCommand = new Command("providers")
   .description("List supported model providers and required environment variables.")
-  .action(() => {
+  .action(async () => {
     const providers = listProviderInfo();
 
-    console.log(chalk.cyan("Supported providers"));
-    console.log();
+    // Show current config
+    const current = await getCurrentProviderConfiguration();
+    if (current.ok) {
+      console.log();
+      console.log(chalk.bold.white("  Current Configuration"));
+      console.log(chalk.dim(`  Provider: ${current.data.provider}`));
+      console.log(chalk.dim(`  Model: ${current.data.model}`));
+      console.log();
+    }
+
+    console.log(chalk.bold.white("  Supported Providers"));
+    console.log(chalk.dim("  Use `huno providers configure` to set up\n"));
 
     for (const provider of providers) {
-      console.log(chalk.green(provider.name));
-      console.log(`  default model: ${provider.defaultModel}`);
+      // Check if configured
+      let configured = false;
+      for (const envKey of provider.envKeys) {
+        if (process.env[envKey]) { configured = true; break; }
+      }
+      try {
+        const fs = require("fs");
+        const config = JSON.parse(fs.readFileSync(".huno/config.json", "utf-8"));
+        if (config.apiKeys && config.apiKeys[provider.name]) configured = true;
+      } catch {}
+
+      const status = configured ? chalk.green("✓") : chalk.dim("○");
+      const name = configured ? chalk.bold(provider.name) : provider.name;
+      console.log(`  ${status} ${name}`);
+      console.log(chalk.dim(`    default: ${provider.defaultModel}`));
       if (provider.aliases.length > 0) {
-        console.log(`  aliases: ${provider.aliases.join(", ")}`);
+        console.log(chalk.dim(`    aliases: ${provider.aliases.join(", ")}`));
       }
       if (provider.envKeys.length > 0) {
-        console.log(`  env: ${provider.envKeys.join(" or ")}`);
-      }
-      if (provider.requiresAccountId) {
-        console.log("  extra: CLOUDFLARE_ACCOUNT_ID");
+        console.log(chalk.dim(`    env: ${provider.envKeys.join(" or ")}`));
       }
       console.log();
     }
 
-    console.log("Setup:");
-    console.log("  1. Create or edit .env in your project root.");
-    console.log("  2. Add the provider key, for example GROQ_API_KEY=...");
-    console.log("  3. Run with --provider, or set HUNO_PROVIDER in .env.");
+    console.log(chalk.dim("  ✓ = configured, ○ = not configured"));
     console.log();
-    console.log("Use:");
-    console.log(chalk.cyan('  huno ask "question" --provider groq --model llama-3.3-70b-versatile'));
-    console.log(chalk.cyan("  HUNO_PROVIDER=google HUNO_MODEL=gemini-3.5-flash huno ask \"question\""));
   });
 
 providersCommand
   .command("configure")
-  .description("Interactively configure a provider and save it to .env and .huno/config.json.")
+  .description("Interactively configure a provider with arrow-key selection.")
   .action(async () => {
     const result = await configureProviderInteractive();
     if (!result.ok) {
@@ -63,17 +77,17 @@ providersCommand
       }
       process.exit(1);
     }
-
-    console.log();
-    console.log(chalk.green(`Configured provider: ${result.data.provider}`));
-    console.log(`Default model: ${result.data.model}`);
-    console.log(`Saved settings to ${chalk.cyan(".env")} and ${chalk.cyan(".huno/config.json")}.`);
+    // Success message already printed in configureProviderInteractive
   });
 
 export async function configureProviderInteractive(): Promise<Result<ProviderConfigurationSummary>> {
   const providers = listProviderInfo();
-  const selected = await selectProviderInteractively(providers);
 
+  // Step 1: Select provider with arrow keys (show configured status)
+  console.log();
+  console.log(chalk.bold.white("  Select a Provider"));
+  console.log(chalk.dim("  Use ↑/↓ arrows and Enter to select\n"));
+  const selected = await selectProviderInteractively(providers);
   if (!selected) {
     return {
       ok: false,
@@ -81,10 +95,26 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
     };
   }
 
+  // Step 2: API key input (skip for Ollama)
   const envUpdates: Record<string, string> = {
     HUNO_PROVIDER: selected.name,
   };
 
+  if (selected.name !== "ollama") {
+    const envKey = selected.envKeys[0];
+    const existingApiKey = process.env[envKey] || "";
+    const apiKey = await prompt(existingApiKey ? `${envKey} [stored]` : envKey, { hidden: true });
+    const finalApiKey = apiKey.trim() || existingApiKey;
+    if (!finalApiKey) {
+      return {
+        ok: false,
+        error: new HunoError("API key is required for this provider.", "API_KEY_MISSING"),
+      };
+    }
+    envUpdates[envKey] = finalApiKey;
+  }
+
+  // Step 3: Cloudflare account ID (if needed)
   let accountId = "";
   if (selected.requiresAccountId) {
     const existingAccountId = process.env.CLOUDFLARE_ACCOUNT_ID || "";
@@ -93,44 +123,37 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
         existingAccountId ? "CLOUDFLARE_ACCOUNT_ID [stored]" : "CLOUDFLARE_ACCOUNT_ID"
       )
     ).trim();
-    if (!accountId && existingAccountId) {
-      accountId = existingAccountId;
-    }
+    if (!accountId && existingAccountId) accountId = existingAccountId;
     if (!accountId) {
       return {
         ok: false,
-        error: new HunoError(
-          "CLOUDFLARE_ACCOUNT_ID is required for Cloudflare.",
-          "PROVIDER_ACCOUNT_ID_MISSING"
-        ),
+        error: new HunoError("CLOUDFLARE_ACCOUNT_ID is required.", "PROVIDER_ACCOUNT_ID_MISSING"),
       };
     }
     envUpdates.CLOUDFLARE_ACCOUNT_ID = accountId;
   }
 
+  // Step 4: Loading state + Model selection
   let model = selected.defaultModel;
   if (selected.name !== "ollama") {
     const envKey = selected.envKeys[0];
-    const existingApiKey = process.env[envKey] || "";
-    const apiKey = await prompt(existingApiKey ? `${envKey} [stored]` : envKey, { hidden: true });
-    const finalApiKey = apiKey.trim() || existingApiKey;
+    const apiKey = envUpdates[envKey] || process.env[envKey] || "";
 
-    if (!finalApiKey) {
-      return {
-        ok: false,
-        error: new HunoError("API key is required for this provider.", "API_KEY_MISSING"),
-      };
-    }
-    envUpdates[envKey] = finalApiKey;
-
+    // Show loading spinner
+    console.log();
+    const spinner = startSpinner(`  Fetching models for ${selected.name}...`);
     const modelResult = await fetchProviderModels({
       provider: selected.name,
-      apiKey: finalApiKey,
+      apiKey,
       cloudflareAccountId: accountId || undefined,
     });
+    stopSpinner(spinner);
 
     if (modelResult.ok && modelResult.data.length > 0) {
-      const selectedModel = await selectModelInteractively(modelResult.data);
+      console.log(chalk.green(`  ✓ Found ${modelResult.data.length} models\n`));
+      console.log(chalk.bold.white("  Select a Model"));
+      console.log(chalk.dim("  Use ↑/↓ arrows and Enter to select\n"));
+      const selectedModel = await selectModelInteractive(modelResult.data);
       if (!selectedModel) {
         return {
           ok: false,
@@ -139,16 +162,22 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
       }
       model = selectedModel;
     } else {
-      console.log();
-      console.log(chalk.yellow("Could not fetch models automatically. Using the provider default model."));
+      console.log(chalk.yellow("  ⚠ Could not fetch models. Using default."));
     }
   }
 
+  // Step 5: Save
   envUpdates.HUNO_MODEL = model;
   const persistResult = await persistProviderConfig(selected.name, model, envUpdates, accountId || undefined);
   if (!persistResult.ok) {
     return persistResult;
   }
+
+  console.log();
+  console.log(chalk.green("  ✓ Provider configured successfully!"));
+  console.log(chalk.dim(`  Provider: ${selected.name}`));
+  console.log(chalk.dim(`  Model: ${model}`));
+  console.log();
 
   return {
     ok: true,
@@ -157,6 +186,33 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
       model,
     },
   };
+}
+
+// ─── Spinner ────────────────────────────────────────────────────────────────
+
+let spinnerInterval: ReturnType<typeof setInterval> | null = null;
+
+function startSpinner(message: string): { stop: () => void } {
+  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  let i = 0;
+  process.stdout.write(message + " " + frames[0]);
+  spinnerInterval = setInterval(() => {
+    i = (i + 1) % frames.length;
+    process.stdout.write(`\r${message} ${frames[i]}`);
+  }, 80);
+  return {
+    stop: () => {
+      if (spinnerInterval) {
+        clearInterval(spinnerInterval);
+        spinnerInterval = null;
+      }
+      process.stdout.write("\r" + " ".repeat(message.length + 2) + "\r");
+    },
+  };
+}
+
+function stopSpinner(handle: { stop: () => void }): void {
+  handle.stop();
 }
 
 export async function configureModelInteractive(): Promise<Result<ProviderConfigurationSummary>> {
@@ -228,7 +284,7 @@ export async function configureModelInteractive(): Promise<Result<ProviderConfig
     };
   }
 
-  const model = await selectModelInteractively(modelResult.data);
+  const model = await selectModelInteractive(modelResult.data);
   if (!model) {
     return {
       ok: false,
@@ -267,8 +323,9 @@ export async function configureModelInteractive(): Promise<Result<ProviderConfig
 export async function getCurrentProviderConfiguration(): Promise<Result<ProviderConfigurationSummary>> {
   const configResult = await loadConfig();
   const config = configResult.ok ? configResult.data : defaultConfig();
-  const provider = process.env.HUNO_PROVIDER || config.defaultProvider;
-  const model = process.env.HUNO_MODEL || config.defaultModel;
+  // Priority: .huno/config.json > env vars
+  const provider = config.defaultProvider || process.env.HUNO_PROVIDER;
+  const model = config.defaultModel || process.env.HUNO_MODEL;
 
   if (!provider) {
     return {
@@ -300,6 +357,7 @@ async function prompt(question: string, options: PromptOptions = {}): Promise<st
   }
 
   return new Promise((resolve) => {
+    process.stdin.resume();
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -320,6 +378,7 @@ async function promptHidden(question: string): Promise<string> {
     const previousRawMode = stdin.isTTY ? stdin.isRaw : false;
 
     readline.emitKeypressEvents(stdin);
+    stdin.resume();
     if (stdin.isTTY) {
       stdin.setRawMode(true);
     }
@@ -358,6 +417,7 @@ async function promptHidden(question: string): Promise<string> {
       if (stdin.isTTY) {
         stdin.setRawMode(previousRawMode);
       }
+      stdin.pause();
     };
 
     stdin.on("keypress", onKeypress);
@@ -365,23 +425,52 @@ async function promptHidden(question: string): Promise<string> {
 }
 
 async function selectProviderInteractively(providers: ProviderInfo[]): Promise<ProviderInfo | null> {
+  // Check which providers have API keys configured
+  const configured = new Set<string>();
+  for (const p of providers) {
+    for (const envKey of p.envKeys) {
+      if (process.env[envKey]) {
+        configured.add(p.name);
+        break;
+      }
+    }
+    // Also check config.json
+    try {
+      const fs = require("fs");
+      const config = JSON.parse(fs.readFileSync(".huno/config.json", "utf-8"));
+      if (config.apiKeys && config.apiKeys[p.name]) configured.add(p.name);
+    } catch {}
+  }
+
   return selectFromList(
     "Choose a provider",
-    providers.map((provider) => ({
-      value: provider,
-      label: provider.name,
-    }))
+    providers.map((provider) => {
+      const isConfigured = configured.has(provider.name);
+      const status = isConfigured ? chalk.green("✓") : chalk.dim(" ");
+      const aliases = provider.aliases.length > 0 ? chalk.dim(` (${provider.aliases.join(", ")})`) : "";
+      return {
+        value: provider,
+        label: `${status} ${chalk.bold(provider.name)}${aliases}${isConfigured ? chalk.dim(" — configured") : ""}`,
+      };
+    })
   );
 }
 
-async function selectModelInteractively(
+async function selectModelInteractive(
   models: ProviderModelInfo[]
 ): Promise<string | null> {
+  // Sort: free models first, then alphabetical within each group
+  const sorted = [...models].sort((a, b) => {
+    if (a.likelyFree && !b.likelyFree) return -1;
+    if (!a.likelyFree && b.likelyFree) return 1;
+    return a.id.localeCompare(b.id);
+  });
+
   return selectFromList(
     "Choose a model",
-    models.map((model) => ({
+    sorted.map((model) => ({
       value: model.id,
-      label: model.id,
+      label: `${model.id}${model.likelyFree ? chalk.green(" (free)") : ""}`,
     }))
   );
 }
@@ -423,6 +512,7 @@ async function selectFromList<T>(
     );
 
     readline.emitKeypressEvents(stdin);
+    stdin.resume();
     if (stdin.isTTY) {
       stdin.setRawMode(true);
     }
@@ -471,6 +561,7 @@ async function selectFromList<T>(
       if (stdin.isTTY) {
         stdin.setRawMode(previousRawMode);
       }
+      stdin.pause();
       if (renderedLineCount > 0) {
         readline.moveCursor(stdout, 0, -(renderedLineCount - 1));
         readline.cursorTo(stdout, 0);
@@ -563,13 +654,34 @@ async function persistProviderConfig(
     config.cloudflareAccountId = cloudflareAccountId;
   }
 
+  // Store API keys in config.json (single source of truth)
+  const providerInfo = listProviderInfo().find(
+    (p) => p.name === provider || p.aliases.includes(provider)
+  );
+  if (providerInfo) {
+    const envKey = providerInfo.envKeys[0];
+    if (envUpdates[envKey]) {
+      if (!config.apiKeys) config.apiKeys = {};
+      const configKey = providerInfo.name as keyof NonNullable<Config["apiKeys"]>;
+      config.apiKeys[configKey] = envUpdates[envKey];
+    }
+  }
+
   const saveResult = await saveConfig(config as Config);
   if (!saveResult.ok) {
     return saveResult;
   }
 
-  const envPath = path.join(process.cwd(), ".env");
-  await writeEnvUpdates(envPath, envUpdates);
+  // Only write non-sensitive config to .env (no API keys)
+  const safeEnvUpdates: Record<string, string> = {};
+  if (envUpdates.HUNO_PROVIDER) safeEnvUpdates.HUNO_PROVIDER = envUpdates.HUNO_PROVIDER;
+  if (envUpdates.HUNO_MODEL) safeEnvUpdates.HUNO_MODEL = envUpdates.HUNO_MODEL;
+  if (envUpdates.CLOUDFLARE_ACCOUNT_ID) safeEnvUpdates.CLOUDFLARE_ACCOUNT_ID = envUpdates.CLOUDFLARE_ACCOUNT_ID;
+
+  if (Object.keys(safeEnvUpdates).length > 0) {
+    const envPath = path.join(process.cwd(), ".env");
+    await writeEnvUpdates(envPath, safeEnvUpdates);
+  }
 
   return { ok: true, data: undefined };
 }

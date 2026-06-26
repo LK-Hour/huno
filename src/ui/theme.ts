@@ -7,9 +7,13 @@
 
 // ── Brand ────────────────────────────────────────────────────────────
 export const brand = {
-  primary: "#6C5CE7" as const,    // Huno purple
-  secondary: "#00CEC9" as const,  // Teal accent
-  accent: "#FDCB6E" as const,     // Warm yellow
+    primary: "#0100BB" as const,
+    secondary: "#00CEC9" as const,
+    accent:   "#4745CD" as const,
+    dark:      "#010149" as const,
+    muted:     "#64676E" as const,
+    text:      "#E0DCDB" as const,
+    border:    "#A0A4A8" as const,
 };
 
 // ── Semantic ─────────────────────────────────────────────────────────
@@ -42,3 +46,17 @@ export const progress = {
   active: "#6C5CE7" as const,
   pending: "#636E72" as const,
 } as const;
+
+// ── Backward compatibility aliases ───────────────────────────────────
+/** @deprecated Use `brand.primary` instead */
+export const Primary = "#0100BB";
+/** @deprecated Use `brand.accent` instead */
+export const Accent = "#4745CD";
+/** @deprecated Use `brand.dark` instead */
+export const Dark = "#010149";
+/** @deprecated Use `brand.muted` instead */
+export const Muted = "#64676E";
+/** @deprecated Use `brand.text` instead */
+export const Text = "#E0DCDB";
+/** @deprecated Use `brand.border` instead */
+export const Border = "#A0A4A8";

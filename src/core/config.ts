@@ -48,6 +48,12 @@ export const ConfigSchema = z.object({
       showContextFiles: z.boolean().default(true),
     })
     .optional(),
+  history: z
+    .object({
+      enabled: z.boolean().default(true),
+      maxMessages: z.number().default(50),
+    })
+    .default({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -102,22 +108,9 @@ export async function saveConfig(config: Config): Promise<Result<void>> {
 export function defaultConfig(): Config {
   return {
     version: "0.1.0",
-    apiKeys: {
-      openrouter: "OPENROUTER_API_KEY",
-      github: "GITHUB_TOKEN",
-      gemini: "GEMINI_API_KEY",
-      google: "GEMINI_API_KEY",
-      groq: "GROQ_API_KEY",
-      cerebras: "CEREBRAS_API_KEY",
-      mistral: "MISTRAL_API_KEY",
-      siliconflow: "SILICONFLOW_API_KEY",
-      cohere: "COHERE_API_KEY",
-      huggingface: "HF_TOKEN",
-      cloudflare: "CLOUDFLARE_API_TOKEN",
-      nvidia: "NVIDIA_API_KEY",
-      ollama: "OLLAMA_API_KEY",
-    },
+    apiKeys: {},
     permissions: { allowRead: true, allowWrite: "ask", allowCommand: "ask", allowDestructive: false },
     memory: { enabled: true, storage: "local" },
+    history: { enabled: true, maxMessages: 50 },
   };
 }
