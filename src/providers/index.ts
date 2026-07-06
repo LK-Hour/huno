@@ -14,6 +14,7 @@ type ProviderDefinition = {
   baseURL: string | ((config: Config) => Result<string>);
   defaultHeaders?: Record<string, string>;
   help: string;
+  signupUrl?: string;
 };
 
 export type ProviderInfo = {
@@ -22,6 +23,7 @@ export type ProviderInfo = {
   envKeys: string[];
   defaultModel: string;
   requiresAccountId?: boolean;
+  signupUrl?: string;
 };
 
 export type ProviderModelInfo = {
@@ -39,9 +41,10 @@ const PROVIDERS: ProviderDefinition[] = [
     name: "openrouter",
     envKeys: ["OPENROUTER_API_KEY"],
     configKey: "openrouter",
-    defaultModel: "google/gemini-2.0-flash-001",
+    defaultModel: "meta-llama/llama-4-scout",
     baseURL: "https://openrouter.ai/api/v1",
     help: "Set OPENROUTER_API_KEY or apiKeys.openrouter, then choose an OpenRouter model.",
+    signupUrl: "https://openrouter.ai/keys",
   },
   {
     name: "github",
@@ -55,6 +58,7 @@ const PROVIDERS: ProviderDefinition[] = [
       "X-GitHub-Api-Version": "2026-03-10",
     },
     help: "Set GITHUB_TOKEN or GITHUB_MODELS_TOKEN with GitHub Models access.",
+    signupUrl: "https://github.com/settings/tokens",
   },
   {
     name: "google",
@@ -64,6 +68,7 @@ const PROVIDERS: ProviderDefinition[] = [
     defaultModel: "gemini-3.5-flash",
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     help: "Set GEMINI_API_KEY from Google AI Studio.",
+    signupUrl: "https://aistudio.google.com/apikey",
   },
   {
     name: "groq",
@@ -72,6 +77,7 @@ const PROVIDERS: ProviderDefinition[] = [
     defaultModel: "llama-3.3-70b-versatile",
     baseURL: "https://api.groq.com/openai/v1",
     help: "Set GROQ_API_KEY and choose a Groq chat model.",
+    signupUrl: "https://console.groq.com/keys",
   },
   {
     name: "cerebras",
@@ -80,6 +86,7 @@ const PROVIDERS: ProviderDefinition[] = [
     defaultModel: "gpt-oss-120b",
     baseURL: "https://api.cerebras.ai/v1",
     help: "Set CEREBRAS_API_KEY and choose an available Cerebras model.",
+    signupUrl: "https://cloud.cerebras.ai/",
   },
   {
     name: "mistral",
@@ -89,6 +96,7 @@ const PROVIDERS: ProviderDefinition[] = [
     defaultModel: "mistral-small-latest",
     baseURL: "https://api.mistral.ai/v1",
     help: "Set MISTRAL_API_KEY and choose a Mistral chat model.",
+    signupUrl: "https://console.mistral.ai/api-keys/",
   },
   {
     name: "siliconflow",
@@ -98,6 +106,7 @@ const PROVIDERS: ProviderDefinition[] = [
     defaultModel: "Pro/zai-org/GLM-4.7",
     baseURL: "https://api.siliconflow.cn/v1",
     help: "Set SILICONFLOW_API_KEY and choose a SiliconFlow chat model.",
+    signupUrl: "https://cloud.siliconflow.com/me/account/ak",
   },
   {
     name: "cohere",
@@ -106,6 +115,7 @@ const PROVIDERS: ProviderDefinition[] = [
     defaultModel: "command-a-plus-05-2026",
     baseURL: "https://api.cohere.ai/compatibility/v1",
     help: "Set COHERE_API_KEY and choose a Cohere compatibility API model.",
+    signupUrl: "https://dashboard.cohere.com/api-keys",
   },
   {
     name: "huggingface",
@@ -115,6 +125,17 @@ const PROVIDERS: ProviderDefinition[] = [
     defaultModel: "openai/gpt-oss-120b:cerebras",
     baseURL: "https://router.huggingface.co/v1",
     help: "Set HF_TOKEN and choose a Hugging Face Inference Provider chat model.",
+    signupUrl: "https://huggingface.co/settings/tokens",
+  },
+  {
+    name: "nvidia",
+    aliases: ["nvidia-nim", "nim"],
+    envKeys: ["NVIDIA_NIM_API_KEY", "NVAPI_KEY"],
+    configKey: "nvidia",
+    defaultModel: "nvidia/nemotron-3-8b-chat",
+    baseURL: "https://integrate.api.nvidia.com/v1",
+    help: "Set NVIDIA_NIM_API_KEY from build.nvidia.com. 100+ models available (Nemotron, DeepSeek, Qwen, Llama, Mistral, Gemma).",
+    signupUrl: "https://build.nvidia.com/settings/api-keys",
   },
   {
     name: "cloudflare",
@@ -140,6 +161,7 @@ const PROVIDERS: ProviderDefinition[] = [
       };
     },
     help: "Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID for Workers AI.",
+    signupUrl: "https://dash.cloudflare.com/profile/api-tokens",
   },
 ];
 
@@ -268,6 +290,7 @@ export function listProviderInfo(): ProviderInfo[] {
       envKeys: provider.envKeys,
       defaultModel: provider.defaultModel,
       requiresAccountId: provider.name === "cloudflare",
+      signupUrl: provider.signupUrl,
     })),
   ];
 }

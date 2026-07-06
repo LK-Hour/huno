@@ -3,8 +3,10 @@ import fs from "fs/promises";
 import path from "path";
 import readline from "readline";
 import chalk from "chalk";
+import { readFileSync } from "fs";
 import {
   fetchProviderModels,
+  findProviderDefinition,
   listProviderInfo,
   type ProviderInfo,
   type ProviderModelInfo,
@@ -12,11 +14,16 @@ import {
 import { defaultConfig, loadConfig, saveConfig, type Config } from "../core/config.js";
 import { ensureHunoDir } from "../storage/huno-dir.js";
 import { HunoError, type Result } from "../utils/errors.js";
+import { selectFromDropdown } from "../ui/terminal-select.js";
+import { neutral, progress, semantic } from "../ui/theme.js";
 
 export type ProviderConfigurationSummary = {
   provider: string;
   model: string;
 };
+
+import { providersAuditCommand } from "./providers-audit.js";
+import { providersBenchmarkCommand } from "./providers-benchmark.js";
 
 export const providersCommand = new Command("providers")
   .description("List supported model providers and required environment variables.")
@@ -43,8 +50,7 @@ export const providersCommand = new Command("providers")
         if (process.env[envKey]) { configured = true; break; }
       }
       try {
-        const fs = require("fs");
-        const config = JSON.parse(fs.readFileSync(".huno/config.json", "utf-8"));
+        const config = JSON.parse(readFileSync(".huno/config.json", "utf-8"));
         if (config.apiKeys && config.apiKeys[provider.name]) configured = true;
       } catch {}
 
@@ -57,6 +63,9 @@ export const providersCommand = new Command("providers")
       }
       if (provider.envKeys.length > 0) {
         console.log(chalk.dim(`    env: ${provider.envKeys.join(" or ")}`));
+      }
+      if (provider.signupUrl) {
+        console.log(chalk.dim(`    get key: ${chalk.cyan(provider.signupUrl)}`));
       }
       console.log();
     }
@@ -80,13 +89,15 @@ providersCommand
     // Success message already printed in configureProviderInteractive
   });
 
+providersCommand.addCommand(providersAuditCommand);
+providersCommand.addCommand(providersBenchmarkCommand);
+
 export async function configureProviderInteractive(): Promise<Result<ProviderConfigurationSummary>> {
   const providers = listProviderInfo();
 
   // Step 1: Select provider with arrow keys (show configured status)
   console.log();
   console.log(chalk.bold.white("  Select a Provider"));
-  console.log(chalk.dim("  Use ↑/↓ arrows and Enter to select\n"));
   const selected = await selectProviderInteractively(providers);
   if (!selected) {
     return {
@@ -95,7 +106,22 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
     };
   }
 
-  // Step 2: API key input (skip for Ollama)
+  // Step 2: Show signup link if not already configured
+  if (selected.name !== "ollama" && selected.signupUrl) {
+    const envKey = selected.envKeys[0];
+    const existingApiKey = process.env[envKey] || "";
+    let configHasKey = false;
+    try {
+      const config = JSON.parse(readFileSync(".huno/config.json", "utf-8"));
+      if (config.apiKeys && config.apiKeys[selected.name]) configHasKey = true;
+    } catch {}
+    if (!existingApiKey && !configHasKey) {
+      console.log(chalk.dim(`    get key: ${chalk.cyan(selected.signupUrl)}`));
+      console.log();
+    }
+  }
+
+  // Step 4: API key input (skip for Ollama)
   const envUpdates: Record<string, string> = {
     HUNO_PROVIDER: selected.name,
   };
@@ -114,7 +140,7 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
     envUpdates[envKey] = finalApiKey;
   }
 
-  // Step 3: Cloudflare account ID (if needed)
+  // Step 5: Cloudflare account ID (if needed)
   let accountId = "";
   if (selected.requiresAccountId) {
     const existingAccountId = process.env.CLOUDFLARE_ACCOUNT_ID || "";
@@ -133,7 +159,7 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
     envUpdates.CLOUDFLARE_ACCOUNT_ID = accountId;
   }
 
-  // Step 4: Loading state + Model selection
+  // Step 6: Loading state + Model selection
   let model = selected.defaultModel;
   if (selected.name !== "ollama") {
     const envKey = selected.envKeys[0];
@@ -152,7 +178,6 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
     if (modelResult.ok && modelResult.data.length > 0) {
       console.log(chalk.green(`  ✓ Found ${modelResult.data.length} models\n`));
       console.log(chalk.bold.white("  Select a Model"));
-      console.log(chalk.dim("  Use ↑/↓ arrows and Enter to select\n"));
       const selectedModel = await selectModelInteractive(modelResult.data);
       if (!selectedModel) {
         return {
@@ -166,7 +191,7 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
     }
   }
 
-  // Step 5: Save
+  // Step 7: Save
   envUpdates.HUNO_MODEL = model;
   const persistResult = await persistProviderConfig(selected.name, model, envUpdates, accountId || undefined);
   if (!persistResult.ok) {
@@ -248,8 +273,14 @@ export async function configureModelInteractive(): Promise<Result<ProviderConfig
   }
 
   const envKey = providerInfo.envKeys[0];
-  const existingApiKey = process.env[envKey] || "";
-  const apiKey = await prompt(existingApiKey ? `${envKey} [stored]` : envKey, { hidden: true });
+  const configResult = await loadConfig();
+  const config = configResult.ok ? configResult.data : defaultConfig();
+  const providerDef = findProviderDefinition(providerInfo.name);
+  const configuredApiKey = providerDef ? config.apiKeys?.[providerDef.configKey] : undefined;
+  const existingApiKey = configuredApiKey || process.env[envKey] || "";
+  const apiKey = existingApiKey
+    ? ""
+    : await prompt(envKey, { hidden: true });
   const finalApiKey = apiKey.trim() || existingApiKey;
   if (!finalApiKey) {
     return {
@@ -424,7 +455,7 @@ async function promptHidden(question: string): Promise<string> {
   });
 }
 
-async function selectProviderInteractively(providers: ProviderInfo[]): Promise<ProviderInfo | null> {
+export async function selectProviderInteractively(providers: ProviderInfo[]): Promise<ProviderInfo | null> {
   // Check which providers have API keys configured
   const configured = new Set<string>();
   for (const p of providers) {
@@ -436,24 +467,27 @@ async function selectProviderInteractively(providers: ProviderInfo[]): Promise<P
     }
     // Also check config.json
     try {
-      const fs = require("fs");
-      const config = JSON.parse(fs.readFileSync(".huno/config.json", "utf-8"));
+      const config = JSON.parse(readFileSync(".huno/config.json", "utf-8"));
       if (config.apiKeys && config.apiKeys[p.name]) configured.add(p.name);
     } catch {}
   }
 
-  return selectFromList(
-    "Choose a provider",
-    providers.map((provider) => {
+  return selectFromDropdown({
+    title: "Choose a provider",
+    maxVisibleItems: 12,
+    filterable: false,
+    items: providers.map((provider) => {
       const isConfigured = configured.has(provider.name);
-      const status = isConfigured ? chalk.green("✓") : chalk.dim(" ");
-      const aliases = provider.aliases.length > 0 ? chalk.dim(` (${provider.aliases.join(", ")})`) : "";
+      const status = isConfigured ? chalk.hex(semantic.success)("✓") : chalk.hex(neutral.muted)(" ");
+      const aliases = provider.aliases.length > 0 ? chalk.hex(neutral.muted)(` (${provider.aliases.join(", ")})`) : "";
+      const configuredLabel = isConfigured ? chalk.hex(neutral.muted)(" — configured") : "";
       return {
         value: provider,
-        label: `${status} ${chalk.bold(provider.name)}${aliases}${isConfigured ? chalk.dim(" — configured") : ""}`,
+        label: `${status} ${chalk.hex(progress.active)(provider.name)}${aliases}${configuredLabel}`,
+        searchableText: [provider.name, ...provider.aliases].join(" "),
       };
-    })
-  );
+    }),
+  });
 }
 
 async function selectModelInteractive(
@@ -466,135 +500,15 @@ async function selectModelInteractive(
     return a.id.localeCompare(b.id);
   });
 
-  return selectFromList(
-    "Choose a model",
-    sorted.map((model) => ({
+  return selectFromDropdown({
+    title: "Choose a model",
+    maxVisibleItems: 12,
+    filterable: false,
+    items: sorted.map((model) => ({
       value: model.id,
-      label: `${model.id}${model.likelyFree ? chalk.green(" (free)") : ""}`,
-    }))
-  );
-}
-
-type ListItem<T> = {
-  value: T;
-  label: string;
-};
-
-async function selectFromList<T>(
-  title: string,
-  items: ListItem<T>[]
-): Promise<T | null> {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.log(chalk.cyan(title));
-    console.log();
-    items.forEach((item, index) => {
-      console.log(`${index + 1}. ${item.label}`);
-    });
-    console.log();
-
-    const input = await prompt("Number");
-    const index = Number.parseInt(input.trim(), 10);
-    if (!Number.isNaN(index) && index >= 1 && index <= items.length) {
-      return items[index - 1].value;
-    }
-    return null;
-  }
-
-  return new Promise((resolve) => {
-    let index = 0;
-    const stdin = process.stdin;
-    const stdout = process.stdout;
-    const previousRawMode = stdin.isTTY ? stdin.isRaw : false;
-    let renderedLineCount = 0;
-    const maxVisibleItems = Math.max(
-      5,
-      Math.min(items.length, (stdout.rows || 24) - 6, 12)
-    );
-
-    readline.emitKeypressEvents(stdin);
-    stdin.resume();
-    if (stdin.isTTY) {
-      stdin.setRawMode(true);
-    }
-
-    const render = (): void => {
-      const lines = [`${chalk.cyan(title)}`, ""];
-      const windowStart = Math.max(
-        0,
-        Math.min(
-          index - Math.floor(maxVisibleItems / 2),
-          items.length - maxVisibleItems
-        )
-      );
-      const visibleItems = items.slice(windowStart, windowStart + maxVisibleItems);
-
-      if (windowStart > 0) {
-        lines.push(chalk.dim(`  ... ${windowStart} more above`));
-      }
-
-      visibleItems.forEach((item, visibleIndex) => {
-        const itemIndex = windowStart + visibleIndex;
-        const prefix = itemIndex === index ? chalk.green(">") : " ";
-        const line = itemIndex === index ? chalk.bold(item.label) : item.label;
-        lines.push(`${prefix} ${line}`);
-      });
-
-      const remainingBelow = items.length - (windowStart + visibleItems.length);
-      if (remainingBelow > 0) {
-        lines.push(chalk.dim(`  ... ${remainingBelow} more below`));
-      }
-
-      lines.push("", chalk.dim("Use up/down arrows and press Enter."));
-
-      if (renderedLineCount > 0) {
-        readline.moveCursor(stdout, 0, -(renderedLineCount - 1));
-        readline.cursorTo(stdout, 0);
-        readline.clearScreenDown(stdout);
-      }
-
-      stdout.write(lines.join("\n"));
-      renderedLineCount = lines.length;
-    };
-
-    const cleanup = (): void => {
-      stdin.off("keypress", onKeypress);
-      if (stdin.isTTY) {
-        stdin.setRawMode(previousRawMode);
-      }
-      stdin.pause();
-      if (renderedLineCount > 0) {
-        readline.moveCursor(stdout, 0, -(renderedLineCount - 1));
-        readline.cursorTo(stdout, 0);
-        readline.clearScreenDown(stdout);
-      }
-      stdout.write("\n");
-    };
-
-    const onKeypress = (_: string, key: { name?: string; ctrl?: boolean }): void => {
-      if (key.name === "up") {
-        index = index === 0 ? items.length - 1 : index - 1;
-        render();
-        return;
-      }
-      if (key.name === "down") {
-        index = index === items.length - 1 ? 0 : index + 1;
-        render();
-        return;
-      }
-      if (key.name === "return") {
-        const selected = items[index].value;
-        cleanup();
-        resolve(selected);
-        return;
-      }
-      if (key.ctrl && key.name === "c") {
-        cleanup();
-        process.exit(1);
-      }
-    };
-
-    render();
-    stdin.on("keypress", onKeypress);
+      label: `${chalk.hex(progress.active)(model.id)}${model.likelyFree ? chalk.hex(semantic.success)(" (free)") : ""}`,
+      searchableText: model.id,
+    })),
   });
 }
 

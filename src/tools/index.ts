@@ -67,13 +67,14 @@ export function fileTools(): ToolDefinition[] {
     },
     {
       name: "patch_file",
-      description: "Find and replace text in a file. The old_string must be unique.",
+      description: "Find and replace text in a file. Supports context lines for precise matching. The old_string must be unique in the file. Use replace_all=true for global replacement.",
       parameters: {
         type: "object",
         properties: {
           path: { type: "string", description: "Relative or absolute file path" },
-          old_string: { type: "string", description: "Text to find and replace" },
+          old_string: { type: "string", description: "Text to find and replace (include surrounding context for uniqueness)" },
           new_string: { type: "string", description: "Replacement text" },
+          replace_all: { type: "boolean", description: "Replace all occurrences instead of requiring a unique match" },
         },
         required: ["path", "old_string", "new_string"],
       },
@@ -81,12 +82,30 @@ export function fileTools(): ToolDefinition[] {
         const fullPath = resolvePath(args.path as string);
         try {
           const content = await fs.readFile(fullPath, "utf-8");
-          if (!content.includes(args.old_string as string)) {
-            return "Error: old_string not found in " + args.path;
+          const oldStr = args.old_string as string;
+          const newStr = args.new_string as string;
+          const replaceAll = args.replace_all as boolean;
+
+          if (!content.includes(oldStr)) {
+            return "Error: old_string not found in " + args.path + ". Make sure to match whitespace and indentation exactly.";
           }
-          const updated = content.replace(args.old_string as string, args.new_string as string);
+
+          if (!replaceAll) {
+            const firstIdx = content.indexOf(oldStr);
+            const secondIdx = content.indexOf(oldStr, firstIdx + 1);
+            if (secondIdx !== -1) {
+              const occurrences = content.split(oldStr).length - 1;
+              return `Error: old_string is not unique in ${args.path} (${occurrences} matches). Add more context lines to old_string, or set replace_all=true.`;
+            }
+          }
+
+          const updated = replaceAll ? content.split(oldStr).join(newStr) : content.replace(oldStr, newStr);
           await fs.writeFile(fullPath, updated, "utf-8");
-          return "Patched " + args.path;
+
+          // Show diff summary
+          const oldLines = oldStr.split("\n").length;
+          const newLines = newStr.split("\n").length;
+          return `Patched ${args.path}: ${oldLines} lines → ${newLines} lines`;
         } catch (err) {
           return "Error patching file: " + (err instanceof Error ? err.message : String(err));
         }
@@ -179,19 +198,49 @@ export function terminalTools(): ToolDefinition[] {
   return [
     {
       name: "run_command",
-      description: "Execute a shell command and return its output.",
+      description: "Execute a shell command and return its output. Supports background mode for long-running processes (dev servers, watchers).",
       parameters: {
         type: "object",
         properties: {
           command: { type: "string", description: "Shell command to execute" },
           timeout: { type: "number", description: "Timeout in seconds (default 30)" },
+          background: { type: "boolean", description: "Run in background (non-blocking). Returns process ID for later use with kill_process." },
         },
         required: ["command"],
       },
       handler: async (args) => {
+        const cmd = args.command as string;
+        const timeout = ((args.timeout as number) || 30) * 1000;
+        const background = args.background as boolean;
+
+        if (background) {
+          // Spawn background process
+          const { spawn } = require("child_process") as { spawn: typeof import("child_process").spawn };
+          const child = spawn("sh", ["-c", cmd], {
+            cwd: getProjectRoot(),
+            stdio: ["pipe", "pipe", "pipe"],
+            detached: false,
+          });
+
+          const pid = child.pid!;
+          // Store for later kill
+          if (!globalThis.__huno_bg_procs) globalThis.__huno_bg_procs = new Map();
+          globalThis.__huno_bg_procs.set(pid, child);
+
+          // Capture first N bytes of output
+          let output = "";
+          child.stdout?.on("data", (d: Buffer) => { if (output.length < 2000) output += d.toString(); });
+          child.stderr?.on("data", (d: Buffer) => { if (output.length < 2000) output += d.toString(); });
+
+          // Wait briefly for initial output
+          await new Promise<void>((resolve) => setTimeout(resolve, 500));
+
+          return `Background process started (PID: ${pid}).\nCommand: ${cmd}\n${output ? "Initial output:\n" + output : "(waiting for output...)"}`;
+        }
+
+        // Foreground (blocking)
         try {
-          const timeout = ((args.timeout as number) || 30) * 1000;
-          const output = execSync(args.command as string, {
+          const output = execSync(cmd, {
             cwd: getProjectRoot(),
             encoding: "utf-8",
             timeout,
@@ -205,7 +254,36 @@ export function terminalTools(): ToolDefinition[] {
       },
       approval: "always",
     },
+    {
+      name: "kill_process",
+      description: "Kill a background process by PID. Use this to stop dev servers, watchers, or other long-running processes started with run_command.",
+      parameters: {
+        type: "object",
+        properties: {
+          pid: { type: "number", description: "Process ID to kill" },
+        },
+        required: ["pid"],
+      },
+      handler: async (args) => {
+        const pid = args.pid as number;
+        if (!globalThis.__huno_bg_procs) return "No background processes running.";
+        const child = globalThis.__huno_bg_procs.get(pid);
+        if (!child) return `Process ${pid} not found. /processes to list active ones.`;
+        try {
+          child.kill("SIGTERM");
+          globalThis.__huno_bg_procs.delete(pid);
+          return `Killed process ${pid}.`;
+        } catch (err) {
+          return `Error killing ${pid}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    },
   ];
+}
+
+// Type augmentation for background process tracking
+declare global {
+  var __huno_bg_procs: Map<number, any> | undefined;
 }
 
 export function allTools(): ToolDefinition[] {

@@ -3,19 +3,38 @@ import React from "react";
 import { Box, Text } from "ink";
 import { scanProject } from "../core/scanner.js";
 import { isHunoInitialized, writeHunoFile } from "../storage/huno-dir.js";
-import { serializeProjectMap } from "../storage/project-map.js";
+import { serializeProjectMap, type ProjectMap } from "../storage/project-map.js";
+import { type Result } from "../utils/errors.js";
 import { renderUI } from "../ui/renderer.js";
 import { Header, ProjectCard, ProgressSteps, ContextFiles } from "../ui/components/index.js";
+
+export async function runExplainAnalysis(): Promise<Result<ProjectMap>> {
+  const scanResult = await scanProject();
+  if (!scanResult.ok) {
+    return scanResult;
+  }
+
+  const map = scanResult.data;
+  const hunoInitialized = await isHunoInitialized();
+  if (hunoInitialized) {
+    const saveResult = await writeHunoFile("project-map.json", serializeProjectMap(map));
+    if (!saveResult.ok) {
+      return saveResult as Result<ProjectMap>;
+    }
+  }
+
+  return { ok: true, data: map };
+}
 
 export const explainCommand = new Command("explain")
   .description("Scan the repository and explain the project.")
   .option("--short", "Show short summary only")
   .option("--json", "Output as JSON")
   .action(async (options: { short?: boolean; json?: boolean }) => {
-    const scanResult = await scanProject();
-    if (!scanResult.ok) {
+    const analysisResult = await runExplainAnalysis();
+    if (!analysisResult.ok) {
       if (options.json) {
-        console.error(JSON.stringify({ ok: false, error: scanResult.error.message }, null, 2));
+        console.error(JSON.stringify({ ok: false, error: analysisResult.error.message }, null, 2));
         process.exit(1);
       }
       renderUI(
@@ -26,7 +45,7 @@ export const explainCommand = new Command("explain")
           React.createElement(
             Box,
             { borderStyle: "round", paddingX: 2, marginTop: 1 },
-            React.createElement(Text, { color: "red" }, "Scan failed. Run `huno init` first.")
+            React.createElement(Text, { color: "red" }, analysisResult.error.message)
           )
         )
       );
@@ -34,28 +53,8 @@ export const explainCommand = new Command("explain")
       return;
     }
 
-    const map = scanResult.data;
-
+    const map = analysisResult.data;
     const hunoInitialized = await isHunoInitialized();
-    if (hunoInitialized) {
-      const saveResult = await writeHunoFile("project-map.json", serializeProjectMap(map));
-      if (!saveResult.ok && !options.json) {
-        renderUI(
-          React.createElement(
-            Box,
-            { flexDirection: "column" },
-            React.createElement(Header, { tagline: "Project Intelligence" }),
-            React.createElement(
-              Box,
-              { borderStyle: "round", paddingX: 2, marginTop: 1 },
-              React.createElement(Text, { color: "red" }, saveResult.error.message)
-            )
-          )
-        );
-        setTimeout(() => process.exit(1), 100);
-        return;
-      }
-    }
 
     // JSON output mode
     if (options.json) {

@@ -1,5 +1,4 @@
 import type { Config } from "../core/config.js";
-import { OpenAICompatibleProvider } from "./openai-compatible.js";
 import type { Provider } from "./base.js";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
@@ -50,9 +49,14 @@ export interface StreamingProvider extends Provider {
 }
 
 export function createStreamingProvider(
-  base: OpenAICompatibleProvider,
+  base: Provider,
   _config: Config
 ): StreamingProvider {
+  // Resolve connection info — OpenAICompatibleProvider exposes baseURL/apiKey;
+  // OllamaProvider doesn't, so fall back to Ollama defaults.
+  const baseURL: string = (base as any).baseURL || "http://localhost:11434/v1";
+  const apiKey: string = (base as any).apiKey || "ollama";
+  const defaultHeaders: Record<string, string> = (base as any).defaultHeaders || {};
   return {
     name: base.name,
     model: base.model,
@@ -105,10 +109,11 @@ export function createStreamingProvider(
         },
       }));
 
-      const response = await fetch(`${(base as any).baseURL}/chat/completions`, {
+      const response = await fetch(`${baseURL}/chat/completions`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${(base as any).apiKey}`,
+          ...defaultHeaders,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -116,6 +121,7 @@ export function createStreamingProvider(
           messages: oaiMessages,
           tools: tools?.length ? tools : undefined,
           stream: true,
+          max_tokens: 1024,
         }),
         signal: options.signal,
       });

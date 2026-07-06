@@ -1,0 +1,17 @@
+# Huno ignore — files/dirs excluded from scans and context
+node_modules/
+dist/
+build/
+.next/
+.cache/
+coverage/
+.vite/
+.turbo/
+__pycache__/
+.pytest_cache/
+.git/
+.huno/
+*.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

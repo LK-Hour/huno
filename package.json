@@ -1,6 +1,6 @@
 {
   "name": "@lk-hour/huno",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "AI-powered project-aware developer assistant. Huno knows your codebase.",
   "type": "module",
   "icon": "assets/huno_profile_256px.ico",
@@ -13,6 +13,7 @@
   },
   "files": [
     "dist/",
+    "assets/",
     "README.md",
     "LICENSE"
   ],
@@ -47,18 +48,13 @@
     "chalk": "^5.3.0",
     "commander": "^11.1.0",
     "dotenv": "^17.4.2",
-    "figures": "^6.1.0",
     "ink": "^7.1.0",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
-    "openai": "^4.73.0",
     "react": "^19.2.7",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3",
-    "vitest": "^1.2.2"
+    "tsx": "^4.23.0",
+    "typescript": "^5.3.3"
   }
 }

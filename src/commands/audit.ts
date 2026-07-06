@@ -434,6 +434,172 @@ function severityToFinding(severity: AuditSeverity): AuditFinding["severity"] {
   }
 }
 
+export type AuditAnalysisOptions = {
+  security?: boolean;
+  docs?: boolean;
+  code?: boolean;
+  deps?: boolean;
+  tests?: boolean;
+  maxIssues?: number;
+};
+
+export async function runAuditAnalysis(
+  options: AuditAnalysisOptions = {}
+): Promise<Result<AuditReport>> {
+  const scanResult = await scanProject();
+  if (!scanResult.ok) {
+    return scanResult as Result<AuditReport>;
+  }
+
+  const map = scanResult.data;
+  const root = map.root;
+  const issues: AuditIssue[] = [];
+
+  const ignorePatterns = await loadIgnorePatterns(root);
+
+  const allRootFiles = await fs.readdir(root);
+  const hasEnv = allRootFiles.some((f) => f.startsWith(".env"));
+  const hasEnvExample = allRootFiles.includes(".env.example");
+  if (hasEnv && !hasEnvExample) {
+    issues.push({
+      id: "missing-env-example",
+      severity: "medium",
+      category: "Configuration",
+      message: ".env file exists but no .env.example found",
+      suggestion:
+        "Create a .env.example with placeholder values to document required environment variables.",
+    });
+  }
+
+  const hasReadme = allRootFiles.some(
+    (f) => f.toUpperCase() === "README.MD" || f.toUpperCase() === "README"
+  );
+  if (!hasReadme) {
+    issues.push({
+      id: "missing-readme",
+      severity: "medium",
+      category: "Documentation",
+      message: "No README.md found",
+      suggestion: "Add a README.md describing your project, how to install, and how to run it.",
+    });
+  }
+
+  const hasLicense = allRootFiles.some(
+    (f) =>
+      f.toUpperCase().startsWith("LICENSE") ||
+      f.toUpperCase() === "COPYING"
+  );
+  if (!hasLicense) {
+    issues.push({
+      id: "missing-license",
+      severity: "low",
+      category: "Legal",
+      message: "No LICENSE file found",
+      suggestion:
+        "Add a LICENSE file to specify how others can use this project.",
+    });
+  }
+
+  const hasGitignore = allRootFiles.includes(".gitignore");
+  if (!hasGitignore) {
+    issues.push({
+      id: "missing-gitignore",
+      severity: "medium",
+      category: "Repository Health",
+      message: "No .gitignore file found",
+      suggestion:
+        "Create a .gitignore to exclude node_modules, dist, .env, etc.",
+    });
+  }
+
+  const hasHunoignore = allRootFiles.includes(".hunoignore");
+  if (!hasHunoignore) {
+    issues.push({
+      id: "missing-hunoignore",
+      severity: "low",
+      category: "Configuration",
+      message: "No .hunoignore file found",
+      suggestion:
+        "Create a .hunoignore to exclude files from Huno's project scanning.",
+    });
+  }
+
+  const testDirPresent = hasTestDir(map.directories);
+  let hasTests = testDirPresent;
+
+  if (!hasTests) {
+    const testFiles = await findFilesByExtension(root, [".test.ts", ".test.js", ".spec.ts", ".spec.js", ".test.py", ".spec.py"]);
+    hasTests = testFiles.length > 0;
+  }
+
+  const pkgPath = path.join(root, "package.json");
+  let pkg: any = null;
+  try {
+    const raw = await fs.readFile(pkgPath, "utf-8");
+    pkg = JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+
+  if (!hasTests && pkg && !hasTestFramework(pkg)) {
+    issues.push({
+      id: "missing-tests",
+      severity: "medium",
+      category: "Testing",
+      message: "No test framework or test files detected",
+      suggestion:
+        "Add a test framework (e.g., vitest, jest, pytest) and write tests for your code.",
+    });
+  }
+
+  if (pkg) {
+    issues.push(...checkOutdatedDependencies(pkg));
+  }
+
+  const allFiles: string[] = [];
+  await walkDir(root, allFiles);
+
+  issues.push(...await checkLargeFiles(root, allFiles));
+  issues.push(...await scanForSecrets(root, allFiles, ignorePatterns));
+  issues.push(...await scanCodeQuality(root, allFiles, ignorePatterns));
+
+  const activeFilters: string[] = [];
+  if (options.security) activeFilters.push("Security");
+  if (options.docs) activeFilters.push("Documentation", "Legal");
+  if (options.code) activeFilters.push("Code Quality");
+  if (options.deps) activeFilters.push("Dependencies");
+  if (options.tests) activeFilters.push("Testing");
+
+  let filteredIssues = issues;
+  if (activeFilters.length > 0) {
+    filteredIssues = issues.filter((issue) => activeFilters.includes(issue.category));
+  }
+
+  if (options.maxIssues !== undefined && options.maxIssues > 0) {
+    const severityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+    filteredIssues = [...filteredIssues].sort(
+      (a, b) => (severityOrder[a.severity] ?? 99) - (severityOrder[b.severity] ?? 99)
+    );
+    filteredIssues = filteredIssues.slice(0, options.maxIssues);
+  }
+
+  return {
+    ok: true,
+    data: {
+      generatedAt: new Date().toISOString(),
+      projectName: map.projectName,
+      root,
+      summary: {
+        total: filteredIssues.length,
+        high: filteredIssues.filter((i) => i.severity === "high").length,
+        medium: filteredIssues.filter((i) => i.severity === "medium").length,
+        low: filteredIssues.filter((i) => i.severity === "low").length,
+      },
+      issues: filteredIssues,
+    },
+  };
+}
+
 export const auditCommand = new Command("audit")
   .description("Run static analysis on the project and report issues.")
   .option("--json", "Output results as JSON")
@@ -452,232 +618,73 @@ export const auditCommand = new Command("audit")
     tests?: boolean;
     maxIssues?: number;
   }) => {
-    const scanResult = await scanProject();
-    if (!scanResult.ok) {
+    {
+      const reportResult = await runAuditAnalysis(options);
+      if (!reportResult.ok) {
+        if (options.json) {
+          console.error(JSON.stringify({ ok: false, error: reportResult.error.message }, null, 2));
+          process.exit(1);
+        }
+        renderUI(
+          React.createElement(
+            Box,
+            { flexDirection: "column" },
+            React.createElement(Header, { tagline: "Project Audit" }),
+            React.createElement(ErrorBox, {
+              message: "Scan failed. Run `huno init` first.",
+              code: "SCAN_FAILED",
+            })
+          )
+        );
+        setTimeout(() => process.exit(1), 100);
+        return;
+      }
+
+      const report = reportResult.data;
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
+
+      const findings: AuditFinding[] = report.issues.map((issue) => ({
+        severity: severityToFinding(issue.severity),
+        category: issue.category,
+        message: issue.message,
+        file: issue.file,
+      }));
+
+      const summaryText = `${report.summary.high} high, ${report.summary.medium} medium, ${report.summary.low} low`;
+
       renderUI(
         React.createElement(
           Box,
           { flexDirection: "column" },
           React.createElement(Header, { tagline: "Project Audit" }),
-          React.createElement(ErrorBox, {
-            message: "Scan failed. Run `huno init` first.",
-            code: "SCAN_FAILED",
-          })
+          React.createElement(ProgressSteps, {
+            steps: [
+              { label: "Scanning project structure" },
+              { label: "Checking for secrets" },
+              { label: "Scanning code quality" },
+              { label: "Generating report" },
+            ],
+            current: 3,
+          }),
+          findings.length === 0
+            ? React.createElement(AuditTable, { findings: [], title: "Audit Results" })
+            : React.createElement(AuditTable, {
+                findings,
+                title: `Audit Results (${summaryText})`,
+              }),
+          report.summary.high > 0 &&
+            React.createElement(WarningBox, {
+              title: "High Priority Issues",
+              message: `${report.summary.high} high-priority issue(s) require immediate attention.`,
+            })
         )
       );
-      setTimeout(() => process.exit(1), 100);
+
+      const exitCode = report.summary.high > 0 ? 1 : 0;
+      setTimeout(() => process.exit(exitCode), 100);
       return;
     }
-
-    const map = scanResult.data;
-    const root = map.root;
-    const issues: AuditIssue[] = [];
-
-    // Load ignore patterns
-    const ignorePatterns = await loadIgnorePatterns(root);
-
-    // 1. Check for .env without .env.example
-    const allRootFiles = await fs.readdir(root);
-    const hasEnv = allRootFiles.some((f) => f.startsWith(".env"));
-    const hasEnvExample = allRootFiles.includes(".env.example");
-    if (hasEnv && !hasEnvExample) {
-      issues.push({
-        id: "missing-env-example",
-        severity: "medium",
-        category: "Configuration",
-        message: ".env file exists but no .env.example found",
-        suggestion:
-          "Create a .env.example with placeholder values to document required environment variables.",
-      });
-    }
-
-    // 2. Check for README.md
-    const hasReadme = allRootFiles.some(
-      (f) => f.toUpperCase() === "README.MD" || f.toUpperCase() === "README"
-    );
-    if (!hasReadme) {
-      issues.push({
-        id: "missing-readme",
-        severity: "medium",
-        category: "Documentation",
-        message: "No README.md found",
-        suggestion: "Add a README.md describing your project, how to install, and how to run it.",
-      });
-    }
-
-    // 3. Check for LICENSE
-    const hasLicense = allRootFiles.some(
-      (f) =>
-        f.toUpperCase().startsWith("LICENSE") ||
-        f.toUpperCase() === "COPYING"
-    );
-    if (!hasLicense) {
-      issues.push({
-        id: "missing-license",
-        severity: "low",
-        category: "Legal",
-        message: "No LICENSE file found",
-        suggestion:
-          "Add a LICENSE file to specify how others can use this project.",
-      });
-    }
-
-    // 4. Check for .gitignore
-    const hasGitignore = allRootFiles.includes(".gitignore");
-    if (!hasGitignore) {
-      issues.push({
-        id: "missing-gitignore",
-        severity: "medium",
-        category: "Repository Health",
-        message: "No .gitignore file found",
-        suggestion:
-          "Create a .gitignore to exclude node_modules, dist, .env, etc.",
-      });
-    }
-
-    // 5. Check for .hunoignore
-    const hasHunoignore = allRootFiles.includes(".hunoignore");
-    if (!hasHunoignore) {
-      issues.push({
-        id: "missing-hunoignore",
-        severity: "low",
-        category: "Configuration",
-        message: "No .hunoignore file found",
-        suggestion:
-          "Create a .hunoignore to exclude files from Huno's project scanning.",
-      });
-    }
-
-    // 6. Check for test setup
-    const testDirPresent = hasTestDir(map.directories);
-    let hasTests = testDirPresent;
-
-    // Also check for test files in src
-    if (!hasTests) {
-      const testFiles = await findFilesByExtension(root, [".test.ts", ".test.js", ".spec.ts", ".spec.js", ".test.py", ".spec.py"]);
-      hasTests = testFiles.length > 0;
-    }
-
-    // Check package.json for test framework
-    const pkgPath = path.join(root, "package.json");
-    let pkg: any = null;
-    try {
-      const raw = await fs.readFile(pkgPath, "utf-8");
-      pkg = JSON.parse(raw);
-    } catch {
-      // ignore
-    }
-
-    if (!hasTests && pkg && !hasTestFramework(pkg)) {
-      issues.push({
-        id: "missing-tests",
-        severity: "medium",
-        category: "Testing",
-        message: "No test framework or test files detected",
-        suggestion:
-          "Add a test framework (e.g., vitest, jest, pytest) and write tests for your code.",
-      });
-    }
-
-    // 7. Check for outdated dependencies
-    if (pkg) {
-      issues.push(...checkOutdatedDependencies(pkg));
-    }
-
-    // 8. Scan all files for large files, secrets, code quality
-    const allFiles: string[] = [];
-    await walkDir(root, allFiles);
-
-    const largeFileIssues = await checkLargeFiles(root, allFiles);
-    issues.push(...largeFileIssues);
-
-    const secretIssues = await scanForSecrets(root, allFiles, ignorePatterns);
-    issues.push(...secretIssues);
-
-    const qualityIssues = await scanCodeQuality(root, allFiles, ignorePatterns);
-    issues.push(...qualityIssues);
-
-    // 9. Apply filters based on flags
-    const activeFilters: string[] = [];
-    if (options.security) activeFilters.push("Security");
-    if (options.docs) activeFilters.push("Documentation", "Legal");
-    if (options.code) activeFilters.push("Code Quality");
-    if (options.deps) activeFilters.push("Dependencies");
-    if (options.tests) activeFilters.push("Testing");
-
-    let filteredIssues = issues;
-    if (activeFilters.length > 0) {
-      filteredIssues = issues.filter((issue) => activeFilters.includes(issue.category));
-    }
-
-    // 10. Apply max-issues limit (prioritize by severity: high > medium > low)
-    if (options.maxIssues !== undefined && options.maxIssues > 0) {
-      const severityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
-      filteredIssues = [...filteredIssues].sort(
-        (a, b) => (severityOrder[a.severity] ?? 99) - (severityOrder[b.severity] ?? 99)
-      );
-      filteredIssues = filteredIssues.slice(0, options.maxIssues);
-    }
-
-    // Build report
-    const report: AuditReport = {
-      generatedAt: new Date().toISOString(),
-      projectName: map.projectName,
-      root,
-      summary: {
-        total: filteredIssues.length,
-        high: filteredIssues.filter((i) => i.severity === "high").length,
-        medium: filteredIssues.filter((i) => i.severity === "medium").length,
-        low: filteredIssues.filter((i) => i.severity === "low").length,
-      },
-      issues: filteredIssues,
-    };
-
-    if (options.json) {
-      console.log(JSON.stringify(report, null, 2));
-      return;
-    }
-
-    // Convert AuditIssue[] to AuditFinding[] for Ink component
-    const findings: AuditFinding[] = filteredIssues.map((issue) => ({
-      severity: issue.severity === "high" ? "critical" : issue.severity === "medium" ? "warning" : "info",
-      category: issue.category,
-      message: issue.message,
-      file: issue.file,
-    }));
-
-    // Render with Ink
-    const summaryText = `${report.summary.high} high, ${report.summary.medium} medium, ${report.summary.low} low`;
-
-    renderUI(
-      React.createElement(
-        Box,
-        { flexDirection: "column" },
-        React.createElement(Header, { tagline: "Project Audit" }),
-        React.createElement(ProgressSteps, {
-          steps: [
-            { label: "Scanning project structure" },
-            { label: "Checking for secrets" },
-            { label: "Scanning code quality" },
-            { label: "Generating report" },
-          ],
-          current: 3,
-        }),
-        findings.length === 0
-          ? React.createElement(AuditTable, { findings: [], title: "Audit Results" })
-          : React.createElement(AuditTable, {
-              findings,
-              title: `Audit Results (${summaryText})`,
-            }),
-        report.summary.high > 0 &&
-          React.createElement(WarningBox, {
-            title: "High Priority Issues",
-            message: `${report.summary.high} high-priority issue(s) require immediate attention.`,
-          })
-      )
-    );
-
-    // Exit with error code if high-priority issues found
-    const exitCode = report.summary.high > 0 ? 1 : 0;
-    setTimeout(() => process.exit(exitCode), 100);
   });

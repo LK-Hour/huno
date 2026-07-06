@@ -1,34 +1,46 @@
-import OpenAI from "openai";
 import { Provider } from "./base.js";
 import { HunoError, Result } from "../utils/errors.js";
 
 export class OllamaProvider implements Provider {
   readonly name = "ollama";
   readonly model: string;
-  private client: OpenAI;
+  private readonly baseURL: string;
 
   constructor(model?: string, baseUrl?: string) {
     this.model = model || "llama3.2";
-    this.client = new OpenAI({
-      apiKey: "ollama",
-      baseURL: baseUrl || "http://localhost:11434/v1",
-    });
+    this.baseURL = (baseUrl || "http://localhost:11434/v1").replace(/\/$/, "");
   }
 
   async complete(prompt: string, context: string): Promise<Result<string>> {
     try {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+      const messages: Array<{ role: string; content: string }> = [];
       if (context) {
         messages.push({ role: "system", content: context });
       }
       messages.push({ role: "user", content: prompt });
 
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages,
+      const response = await fetch(`${this.baseURL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer ollama",
+        },
+        body: JSON.stringify({ model: this.model, messages }),
       });
 
-      const content = response.choices[0]?.message?.content;
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: new HunoError(
+            `Ollama request failed: ${response.status} ${response.statusText}`,
+            "PROVIDER_REQUEST_FAILED",
+            "Make sure Ollama is running (ollama serve) and the model is pulled."
+          ),
+        };
+      }
+
+      const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const content = data.choices?.[0]?.message?.content;
       if (!content) {
         return {
           ok: false,
