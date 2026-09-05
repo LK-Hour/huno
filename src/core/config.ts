@@ -23,6 +23,8 @@ export const ConfigSchema = z.object({
       huggingface: z.string().optional(),
       cloudflare: z.string().optional(),
       nvidia: z.string().optional(),
+      sambanova: z.string().optional(),
+      chutes: z.string().optional(),
       ollama: z.string().optional(),
     })
     .optional(),

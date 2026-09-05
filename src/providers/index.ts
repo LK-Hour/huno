@@ -138,6 +138,24 @@ const PROVIDERS: ProviderDefinition[] = [
     signupUrl: "https://build.nvidia.com/settings/api-keys",
   },
   {
+    name: "sambanova",
+    envKeys: ["SAMBANOVA_API_KEY"],
+    configKey: "sambanova",
+    defaultModel: "Meta-Llama-3.3-70B-Instruct",
+    baseURL: "https://api.sambanova.ai/v1",
+    help: "Set SAMBANOVA_API_KEY and choose a SambaNova Cloud chat model. Free tier, no credit card required.",
+    signupUrl: "https://cloud.sambanova.ai/",
+  },
+  {
+    name: "chutes",
+    envKeys: ["CHUTES_API_KEY"],
+    configKey: "chutes",
+    defaultModel: "deepseek-ai/DeepSeek-V3",
+    baseURL: "https://llm.chutes.ai/v1",
+    help: "Set CHUTES_API_KEY and choose a Chutes open-source chat model. Runs on donated compute, free to use.",
+    signupUrl: "https://chutes.ai/auth/signup",
+  },
+  {
     name: "cloudflare",
     aliases: ["cloudflare-workers-ai", "workers-ai", "workers_ai"],
     envKeys: ["CLOUDFLARE_API_TOKEN"],
@@ -413,6 +431,10 @@ function isLikelyFreeModel(providerName: string, modelId: string): boolean {
       return /flash|gemma/.test(id);
     case "openrouter":
       return id.includes(":free");
+    case "sambanova":
+    case "chutes":
+      // Entire catalog is free on these platforms.
+      return true;
     default:
       return /flash|mini|small|8b|7b|3b|2b|1b|gemma/.test(id);
   }

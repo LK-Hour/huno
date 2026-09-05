@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 import type { ToolDefinition } from "../providers/chat.js";
 import { getProjectRoot } from "../utils/paths.js";
 import { gitTools } from "./git.js";
@@ -215,7 +215,6 @@ export function terminalTools(): ToolDefinition[] {
 
         if (background) {
           // Spawn background process
-          const { spawn } = require("child_process") as { spawn: typeof import("child_process").spawn };
           const child = spawn("sh", ["-c", cmd], {
             cwd: getProjectRoot(),
             stdio: ["pipe", "pipe", "pipe"],

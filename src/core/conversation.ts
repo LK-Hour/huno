@@ -3,7 +3,6 @@ import { renderUI } from "../ui/renderer.js";
 import React from "react";
 import { Box, Text } from "ink";
 import chalk from "chalk";
-import { createInterface } from "readline";
 
 export type ConversationOptions = {
   provider: StreamingProvider;
@@ -26,19 +25,6 @@ export type ConversationResult = {
   messages: ChatMessage[];
   snapshots: Snapshot[];
 };
-
-function promptApproval(message: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    rl.question(message + " [y/N] ", (answer) => {
-      rl.close();
-      resolve(answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes");
-    });
-  });
-}
 
 export async function runConversation(
   userMessage: string,
@@ -146,8 +132,9 @@ export async function runConversation(
         continue;
       }
 
-      // Approval check
-      if (tool.approval === "always" && options.onApprove) {
+      // Approval check ("risky" tools prompt the same as "always" ones;
+      // only "never"/unmarked tools skip the gate)
+      if ((tool.approval === "always" || tool.approval === "risky") && options.onApprove) {
         const approved = await options.onApprove(tc.function.name, args);
         if (!approved) {
           messages.push({
