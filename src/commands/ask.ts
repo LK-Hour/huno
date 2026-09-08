@@ -10,6 +10,7 @@ import { startSpinner, writeStatus } from "../ui/spinner.js";
 import { renderLogo } from "../ui/logo.js";
 import { requestApproval } from "../core/approval.js";
 import { describeToolCall, buildFullPrompt } from "../core/chat-ui.js";
+import { progress } from "../ui/theme.js";
 
 export const askCommand = new Command("ask")
   .description("Ask a question about your project.")
@@ -21,7 +22,7 @@ export const askCommand = new Command("ask")
     console.log();
     renderLogo().forEach((line) => console.log("  " + line));
     console.log();
-    console.log(chalk.hex("#6C5CE7")("  ◈") + " Project Q&A");
+    console.log(chalk.hex(progress.active)("  ◈") + " Project Q&A");
     console.log();
 
     // Step 1: Building context

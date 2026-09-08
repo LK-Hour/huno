@@ -1,15 +1,9 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { spawn } from "child_process";
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
 import { checkForUpdate, PACKAGE_NAME } from "../utils/version-check.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf-8"));
-const VERSION = pkg.version;
+import { VERSION } from "../utils/version.js";
+import { brand } from "../ui/theme.js";
 
 function runNpmInstall(): Promise<number> {
   return new Promise((resolve) => {
@@ -34,7 +28,7 @@ export const updateCommand = new Command("update")
       console.log(chalk.yellow("  ⚠ Couldn't reach npm to check for updates."));
       console.log(chalk.dim(`  Check your connection, or run: npm install -g ${PACKAGE_NAME}@latest`));
       console.log();
-      return;
+      process.exit(1);
     }
 
     if (!status.hasUpdate) {
@@ -45,7 +39,7 @@ export const updateCommand = new Command("update")
     }
 
     console.log();
-    console.log(chalk.hex("#00CEC9")(`  ✨ Update available: v${status.current} → v${status.latest}`));
+    console.log(chalk.hex(brand.secondary)(`  ✨ Update available: v${status.current} → v${status.latest}`));
 
     if (opts.check) {
       console.log(chalk.dim(`  Run \`huno update\` to install it.`));
@@ -63,6 +57,8 @@ export const updateCommand = new Command("update")
       console.log(chalk.red("  ✗ Update failed."));
       console.log(chalk.dim(`  Try running it manually: npm install -g ${PACKAGE_NAME}@latest`));
       console.log(chalk.dim("  (If you installed with sudo/a different package manager, use that instead.)"));
+      console.log();
+      process.exit(1);
     }
     console.log();
   });

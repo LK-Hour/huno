@@ -370,7 +370,7 @@ export function printResults(results: ModelResult[]): void {
 }
 
 export const providersBenchmarkCommand = new Command("benchmark")
-  .description("Test every free model across all working providers in parallel")
+  .description("Test every free model across all working providers in parallel.")
   .option("-n, --models-per-provider <n>", "Optional max free models to test per provider")
   .option("-p, --providers <list>", "Comma-separated providers to test (default: all configured)")
   .action(async (options: { modelsPerProvider?: string; providers?: string }) => {

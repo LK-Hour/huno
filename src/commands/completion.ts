@@ -46,8 +46,7 @@ export function createCompletionCommand(program: Command): Command {
     .action((shell: string) => {
       if (!SHELLS.includes(shell as Shell)) {
         console.error(`Unsupported shell: ${shell}. Supported: ${SHELLS.join(", ")}`);
-        process.exitCode = 1;
-        return;
+        process.exit(1);
       }
       const commands = program.commands.map((c) => c.name());
       const script =

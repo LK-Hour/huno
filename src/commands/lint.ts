@@ -478,7 +478,7 @@ function formatReport(report: LintReport, verbose: boolean): string {
 }
 
 export const lintCommand = new Command("lint")
-  .description("Lint the project — providers, types, code quality, git status")
+  .description("Lint the project — providers, types, code quality, git status.")
   .option("-v, --verbose", "Show all results including passing checks")
   .option("--json", "Output as JSON")
   .option("--providers-only", "Only check provider configuration")

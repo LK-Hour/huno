@@ -3,6 +3,7 @@ import path from "path";
 import { execSync } from "child_process";
 import type { ToolDefinition } from "../providers/chat.js";
 import { getProjectRoot } from "../utils/paths.js";
+import { VERSION } from "../utils/version.js";
 
 function resolvePath(input: string): string {
   return path.isAbsolute(input) ? input : path.join(getProjectRoot(), input);
@@ -49,7 +50,7 @@ export function webTools(): ToolDefinition[] {
         try {
           const response = await fetch(url, {
             method,
-            headers: { "User-Agent": "Huno/0.1.0", ...headers },
+            headers: { "User-Agent": `Huno/${VERSION}`, ...headers },
             body: body ? String(body) : undefined,
             signal: AbortSignal.timeout(15000),
           });

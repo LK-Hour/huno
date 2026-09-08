@@ -54,14 +54,13 @@ export const configCommand = new Command("config").description(
 
 configCommand
   .command("list")
-  .description("List all configuration values")
+  .description("List all configuration values.")
   .action(async () => {
     const result = await loadConfig();
     if (!result.ok) {
       console.error(chalk.red("  ✗ " + result.error.message));
       if (result.error.hint) console.error(chalk.dim("  " + result.error.hint));
-      process.exitCode = 1;
-      return;
+      process.exit(1);
     }
     console.log();
     for (const [key, value] of flatten(result.data)) {
@@ -74,14 +73,13 @@ configCommand
 configCommand
   .command("get")
   .argument("<key>", "Dot-path key, e.g. defaultProvider or permissions.allowWrite")
-  .description("Get a single configuration value")
+  .description("Get a single configuration value.")
   .action(async (key: string) => {
     const result = await loadConfig();
     if (!result.ok) {
       console.error(chalk.red("  ✗ " + result.error.message));
       if (result.error.hint) console.error(chalk.dim("  " + result.error.hint));
-      process.exitCode = 1;
-      return;
+      process.exit(1);
     }
     const value = getPath(result.data, key);
     if (value === undefined) {
@@ -95,14 +93,13 @@ configCommand
   .command("set")
   .argument("<key>", "Dot-path key, e.g. defaultProvider or permissions.allowWrite")
   .argument("<value>", "Value to store (true/false/number/string)")
-  .description("Set a single configuration value")
+  .description("Set a single configuration value.")
   .action(async (key: string, rawValue: string) => {
     const result = await loadConfig();
     if (!result.ok) {
       console.error(chalk.red("  ✗ " + result.error.message));
       console.error(chalk.dim("  Run `huno init` first."));
-      process.exitCode = 1;
-      return;
+      process.exit(1);
     }
     const config = result.data as unknown as Record<string, unknown>;
     setPath(config, key, coerceValue(rawValue));
@@ -110,15 +107,13 @@ configCommand
     const validated = ConfigSchema.safeParse(config);
     if (!validated.success) {
       console.error(chalk.red(`  ✗ Invalid value for "${key}": ${validated.error.issues[0]?.message}`));
-      process.exitCode = 1;
-      return;
+      process.exit(1);
     }
 
     const saveResult = await saveConfig(validated.data);
     if (!saveResult.ok) {
       console.error(chalk.red("  ✗ " + saveResult.error.message));
-      process.exitCode = 1;
-      return;
+      process.exit(1);
     }
     console.log(chalk.green(`  ✓ ${key} = ${rawValue}`));
   });

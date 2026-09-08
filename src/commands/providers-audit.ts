@@ -170,7 +170,7 @@ function printResult(result: AuditResult): void {
 }
 
 export const providersAuditCommand = new Command("audit")
-  .description("Verify all providers: check API keys and connectivity")
+  .description("Verify all providers: check API keys and connectivity.")
   .option("-c, --concurrent <n>", "Number of concurrent checks", "5")
   .action(async (options: { concurrent?: string }) => {
     await runProviderAudit({

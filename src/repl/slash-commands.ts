@@ -1,9 +1,7 @@
 import chalk from "chalk";
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
 import { listProviderInfo } from "../providers/index.js";
 import { checkForUpdate } from "../utils/version-check.js";
+import { VERSION } from "../utils/version.js";
 import {
   configureModelInteractive,
   configureProviderInteractive,
@@ -16,11 +14,6 @@ import { appendMemory, readMemoryFile, parseMemoryEntries, searchMemory } from "
 import { readSessionHistory } from "../storage/huno-dir.js";
 import { brand, neutral, progress } from "../ui/theme.js";
 import type { ReplSession } from "./session.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf-8"));
-const VERSION = pkg.version;
 
 async function runUpdateCheck(): Promise<void> {
   console.log();

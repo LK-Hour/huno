@@ -82,8 +82,7 @@ export const resetCommand = new Command("reset")
     const saveResult = await saveConfig(defaultConfig());
     if (!saveResult.ok) {
       console.error(chalk.red("  ✗ " + saveResult.error.message));
-      process.exitCode = 1;
-      return;
+      process.exit(1);
     }
     await fs.writeFile(path.join(dir, "history.jsonl"), "", "utf-8");
     await fs.writeFile(path.join(dir, "project-map.json"), serializeProjectMap(emptyProjectMap()), "utf-8");

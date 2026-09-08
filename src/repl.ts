@@ -17,19 +17,14 @@ import { startSpinner, writeStatus } from "./ui/spinner.js";
 import { renderLogo } from "./ui/logo.js";
 import { brand, progress } from "./ui/theme.js";
 import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { join } from "path";
 import { ReplSession } from "./repl/session.js";
 import { trimToBudget } from "./repl/token-budget.js";
 import { loadHistory, saveHistory, MAX_HISTORY } from "./repl/history.js";
 import { createSlashDropdown } from "./repl/dropdown.js";
 import { buildSlashCommands, findSlashCommand, type ReplRuntime } from "./repl/slash-commands.js";
 import { checkForUpdate } from "./utils/version-check.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const pkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
-const VERSION = pkg.version;
+import { VERSION } from "./utils/version.js";
 
 function getContextFiles(): string[] {
   const result = readHunoFileSync("project-map.json");
