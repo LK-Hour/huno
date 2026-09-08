@@ -38,6 +38,7 @@ import { configureCommand } from "./commands/configure.js";
 import { updateCommand } from "./commands/update.js";
 import { configCommand } from "./commands/config.js";
 import { createCompletionCommand } from "./commands/completion.js";
+import { cleanCommand, resetCommand } from "./commands/clean.js";
 import { runRepl } from "./repl.js";
 
 const program = new Command();
@@ -62,6 +63,8 @@ program.addCommand(configureCommand);
 program.addCommand(updateCommand);
 program.addCommand(configCommand);
 program.addCommand(createCompletionCommand(program));
+program.addCommand(cleanCommand);
+program.addCommand(resetCommand);
 
 // If no arguments given, launch interactive REPL
 if (process.argv.length <= 2) {

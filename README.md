@@ -620,7 +620,7 @@ in-session slash commands). Everything below is also available as a direct
 subcommand for scripting and CI.
 
 ```bash
-huno init          # Initialize Huno in the current project
+huno init          # Initialize Huno in the current project (--force to reset to defaults)
 huno explain       # Scan and explain the project structure
 huno ask <q>       # Ask a project-aware question
 huno remember      # Save a project memory
@@ -630,11 +630,14 @@ huno lint          # Providers, types, code quality, git status
 huno doc           # Generate project documentation
 huno providers     # List supported model providers
 huno model         # Show or change the configured model
-huno configure     # Interactive provider/API key/model setup wizard
+huno configure     # Provider/API key/model setup — interactive, or non-interactive
+                    # via --provider/--model/--api-key/--account-id (CI-friendly)
 huno config        # Get/set/list config values non-interactively (CI/scripting)
 huno doctor        # Check environment and configuration for common issues
 huno update        # Check for and install the latest version of Huno
 huno completion    # Print a shell completion script (bash, zsh, fish)
+huno clean         # Clear regenerable cache/logs for this project
+huno reset         # Reset this project's Huno state to defaults (asks to confirm)
 ```
 
 ### Future Commands

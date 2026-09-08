@@ -3,7 +3,22 @@ import path from "path";
 import { getHunoDir } from "../utils/paths.js";
 import { HunoError, Result } from "../utils/errors.js";
 
-export type InitEntryStatus = "created" | "exists";
+export const DEFAULT_MEMORY_TEMPLATE = `# Huno Project Memory
+
+## Decisions
+
+-
+
+## Preferences
+
+-
+
+## Notes
+
+-
+`;
+
+export type InitEntryStatus = "created" | "exists" | "overwritten";
 
 export type InitEntry = {
   path: string;
@@ -84,6 +99,33 @@ export async function ensureHunoFile(
     return {
       ok: true,
       data: { path: `.huno/${filename}`, type: "file", status: "created" },
+    };
+  } catch {
+    return {
+      ok: false,
+      error: new HunoError(
+        `Could not write .huno/${filename}`,
+        "FILE_WRITE_FAILED",
+        "Check directory permissions and available disk space."
+      ),
+    };
+  }
+}
+
+export async function writeHunoFileForce(
+  filename: string,
+  content: string
+): Promise<Result<InitEntry>> {
+  const dir = getHunoDir();
+  const filePath = path.join(dir, filename);
+
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    const existed = await pathExists(filePath);
+    await fs.writeFile(filePath, content, "utf-8");
+    return {
+      ok: true,
+      data: { path: `.huno/${filename}`, type: "file", status: existed ? "overwritten" : "created" },
     };
   } catch {
     return {

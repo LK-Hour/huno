@@ -6,6 +6,8 @@ import {
   ensureHunoDir,
   ensureHunoFile,
   ensureHunoSubdir,
+  writeHunoFileForce,
+  DEFAULT_MEMORY_TEMPLATE,
   type InitEntry,
 } from "../storage/huno-dir.js";
 import { defaultConfig } from "../core/config.js";
@@ -14,7 +16,8 @@ import { getProjectRoot } from "../utils/paths.js";
 
 export const initCommand = new Command("init")
   .description("Initialize Huno in the current project.")
-  .action(async () => {
+  .option("-f, --force", "Overwrite existing .huno/*.json and memory.md with fresh defaults")
+  .action(async (opts: { force?: boolean }) => {
     console.log(chalk.cyan("Initializing Huno..."));
 
     const dirResult = await ensureHunoDir();
@@ -24,20 +27,7 @@ export const initCommand = new Command("init")
     }
 
     const configContent = JSON.stringify(defaultConfig(), null, 2);
-    const memoryContent = `# Huno Project Memory
-
-## Decisions
-
-- 
-
-## Preferences
-
-- 
-
-## Notes
-
-- 
-`;
+    const memoryContent = DEFAULT_MEMORY_TEMPLATE;
     const mapContent = serializeProjectMap(emptyProjectMap());
     const historyContent = "";
 
@@ -78,7 +68,9 @@ pnpm-lock.yaml
     await ensureGitignoreIgnoresHuno();
 
     for (const file of files) {
-      const result = await ensureHunoFile(file.name, file.content);
+      const result = opts.force
+        ? await writeHunoFileForce(file.name, file.content)
+        : await ensureHunoFile(file.name, file.content);
       if (!result.ok) {
         console.error(chalk.red(result.error.toString()));
         process.exit(1);
@@ -97,8 +89,11 @@ pnpm-lock.yaml
 
     const created = results.filter((entry) => entry.status === "created");
     const existing = results.filter((entry) => entry.status === "exists");
+    const overwritten = results.filter((entry) => entry.status === "overwritten");
 
-    if (created.length === results.length) {
+    if (overwritten.length > 0) {
+      console.log(chalk.green(`Huno re-initialized this project (${overwritten.length} file(s) reset to defaults).`));
+    } else if (created.length === results.length) {
       console.log(chalk.green("Huno initialized this project."));
     } else {
       console.log(chalk.green("Huno is already initialized."));
@@ -109,6 +104,14 @@ pnpm-lock.yaml
       console.log("Created:");
       for (const entry of created) {
         console.log(chalk.green(`  ✓ ${entry.path}`));
+      }
+    }
+
+    if (overwritten.length > 0) {
+      console.log();
+      console.log("Overwritten (--force):");
+      for (const entry of overwritten) {
+        console.log(chalk.yellow(`  ⚠ ${entry.path}`));
       }
     }
 

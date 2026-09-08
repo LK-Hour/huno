@@ -213,6 +213,77 @@ export async function configureProviderInteractive(): Promise<Result<ProviderCon
   };
 }
 
+/**
+ * Non-interactive counterpart to configureProviderInteractive(), for CI and
+ * scripting (`huno configure --provider ... --api-key ...`). Trusts the
+ * caller's --model rather than fetching the provider's live model list, so
+ * it never needs network access to succeed.
+ */
+export async function configureProviderNonInteractive(opts: {
+  provider: string;
+  model?: string;
+  apiKey?: string;
+  accountId?: string;
+}): Promise<Result<ProviderConfigurationSummary>> {
+  const providers = listProviderInfo();
+  const normalized = opts.provider.toLowerCase();
+  const selected = providers.find((p) => p.name === normalized || p.aliases.includes(normalized));
+  if (!selected) {
+    return {
+      ok: false,
+      error: new HunoError(
+        `Unknown provider: ${opts.provider}`,
+        "PROVIDER_UNKNOWN",
+        `Supported: ${providers.map((p) => p.name).join(", ")}`
+      ),
+    };
+  }
+
+  const envUpdates: Record<string, string> = { HUNO_PROVIDER: selected.name };
+  let accountId: string | undefined;
+
+  if (selected.name !== "ollama") {
+    const envKey = selected.envKeys[0];
+    const finalApiKey = opts.apiKey || process.env[envKey] || "";
+    if (!finalApiKey) {
+      return {
+        ok: false,
+        error: new HunoError(
+          "API key is required for this provider.",
+          "API_KEY_MISSING",
+          `Pass --api-key, or set ${envKey} in your environment.`
+        ),
+      };
+    }
+    envUpdates[envKey] = finalApiKey;
+  }
+
+  if (selected.requiresAccountId) {
+    accountId = opts.accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
+    if (!accountId) {
+      return {
+        ok: false,
+        error: new HunoError(
+          "CLOUDFLARE_ACCOUNT_ID is required.",
+          "PROVIDER_ACCOUNT_ID_MISSING",
+          "Pass --account-id, or set CLOUDFLARE_ACCOUNT_ID in your environment."
+        ),
+      };
+    }
+    envUpdates.CLOUDFLARE_ACCOUNT_ID = accountId;
+  }
+
+  const model = opts.model || selected.defaultModel;
+  envUpdates.HUNO_MODEL = model;
+
+  const persistResult = await persistProviderConfig(selected.name, model, envUpdates, accountId);
+  if (!persistResult.ok) {
+    return persistResult;
+  }
+
+  return { ok: true, data: { provider: selected.name, model } };
+}
+
 // ─── Spinner ────────────────────────────────────────────────────────────────
 
 let spinnerInterval: ReturnType<typeof setInterval> | null = null;
