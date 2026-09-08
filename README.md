@@ -615,30 +615,26 @@ Multi-agent mode should come later, after the single-agent CLI is stable.
 
 ## CLI Commands
 
-The first version should stay small.
-
-### Core MVP Commands
-
-```bash
-huno init
-huno explain
-huno ask
-huno remember
-huno recall
-huno audit
-```
-
-### Extended Commands
+Running `huno` with no arguments launches the interactive REPL (with `/help` for
+in-session slash commands). Everything below is also available as a direct
+subcommand for scripting and CI.
 
 ```bash
-huno doc
-huno run
-huno fix
-huno test
-huno diff
-huno undo
-huno history
-huno config
+huno init          # Initialize Huno in the current project
+huno explain       # Scan and explain the project structure
+huno ask <q>       # Ask a project-aware question
+huno remember      # Save a project memory
+huno recall <q>    # Search project memory
+huno audit         # Static analysis / issue report
+huno lint          # Providers, types, code quality, git status
+huno doc           # Generate project documentation
+huno providers     # List supported model providers
+huno model         # Show or change the configured model
+huno configure     # Interactive provider/API key/model setup wizard
+huno config        # Get/set/list config values non-interactively (CI/scripting)
+huno doctor        # Check environment and configuration for common issues
+huno update        # Check for and install the latest version of Huno
+huno completion    # Print a shell completion script (bash, zsh, fish)
 ```
 
 ### Future Commands

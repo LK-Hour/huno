@@ -35,6 +35,9 @@ import { providersCommand } from "./commands/providers.js";
 import { modelCommand } from "./commands/model.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { configureCommand } from "./commands/configure.js";
+import { updateCommand } from "./commands/update.js";
+import { configCommand } from "./commands/config.js";
+import { createCompletionCommand } from "./commands/completion.js";
 import { runRepl } from "./repl.js";
 
 const program = new Command();
@@ -56,6 +59,9 @@ program.addCommand(providersCommand);
 program.addCommand(modelCommand);
 program.addCommand(doctorCommand);
 program.addCommand(configureCommand);
+program.addCommand(updateCommand);
+program.addCommand(configCommand);
+program.addCommand(createCompletionCommand(program));
 
 // If no arguments given, launch interactive REPL
 if (process.argv.length <= 2) {

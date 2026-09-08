@@ -1,5 +1,9 @@
 import chalk from "chalk";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { listProviderInfo } from "../providers/index.js";
+import { checkForUpdate } from "../utils/version-check.js";
 import {
   configureModelInteractive,
   configureProviderInteractive,
@@ -12,6 +16,28 @@ import { appendMemory, readMemoryFile, parseMemoryEntries, searchMemory } from "
 import { readSessionHistory } from "../storage/huno-dir.js";
 import { brand, neutral, progress } from "../ui/theme.js";
 import type { ReplSession } from "./session.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf-8"));
+const VERSION = pkg.version;
+
+async function runUpdateCheck(): Promise<void> {
+  console.log();
+  console.log(chalk.dim(`  Current version: v${VERSION}`));
+  console.log(chalk.dim("  Checking npm for the latest version..."));
+  const status = await checkForUpdate(VERSION, { force: true, timeoutMs: 8000 });
+  console.log();
+  if (!status) {
+    console.log(chalk.yellow("  ⚠ Couldn't reach npm to check for updates."));
+  } else if (!status.hasUpdate) {
+    console.log(chalk.green(`  ✓ You're up to date (v${status.current}).`));
+  } else {
+    console.log(chalk.hex(brand.secondary)(`  ✨ Update available: v${status.current} → v${status.latest}`));
+    console.log(chalk.dim("  Exit this session and run `huno update` to install it."));
+  }
+  console.log();
+}
 
 export type CommandHandler = (arg: string, ctx: ReplRuntime) => Promise<void> | void;
 
@@ -499,6 +525,12 @@ export function buildSlashCommands(): SlashCommand[] {
       usage: "/sessions",
       description: "Show recent session history",
       handler: () => showSessions(),
+    },
+    {
+      name: "/update",
+      usage: "/update",
+      description: "Check for a newer version of Huno",
+      handler: () => runUpdateCheck(),
     },
     {
       name: "/exit",

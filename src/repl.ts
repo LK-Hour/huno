@@ -24,6 +24,7 @@ import { trimToBudget } from "./repl/token-budget.js";
 import { loadHistory, saveHistory, MAX_HISTORY } from "./repl/history.js";
 import { createSlashDropdown } from "./repl/dropdown.js";
 import { buildSlashCommands, findSlashCommand, type ReplRuntime } from "./repl/slash-commands.js";
+import { checkForUpdate } from "./utils/version-check.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -218,6 +219,17 @@ export async function runRepl(): Promise<void> {
     console.log(chalk.cyan("    huno configure") + chalk.dim("   — interactive setup wizard (recommended)"));
     console.log(chalk.cyan("    /configure") + chalk.dim("       — same wizard from within this REPL"));
     console.log(chalk.dim("  Then add your API key when prompted."));
+  }
+
+  const updateStatus = await checkForUpdate(VERSION).catch(() => null);
+  if (updateStatus?.hasUpdate) {
+    console.log();
+    console.log(
+      chalk.hex(brand.secondary)("  ✨ Update available: ") +
+        chalk.dim(`v${updateStatus.current} → `) +
+        chalk.bold.white(`v${updateStatus.latest}`) +
+        chalk.dim(" · run `huno update`")
+    );
   }
 
   console.log();
