@@ -9,7 +9,8 @@
   <meta property="og:title" content="Huno — Who knows your codebase? Huno knows." />
   <meta property="og:description" content="A project-aware AI developer assistant with memory, audits, docs, safe terminal workflows and more." />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://github.com/LK-Hour/huno" />
+  <meta property="og:url" content="https://huno.vercel.app/" />
+  <link rel="canonical" href="https://huno.vercel.app/" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070911'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='17' font-weight='700' text-anchor='middle' fill='%2334d399'%3E?%3C/text%3E%3Crect x='22' y='23' width='5' height='3' fill='%2322d3ee'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -30,6 +31,7 @@
         <a href="#features">Features</a>
         <a href="#commands">Commands</a>
         <a href="#memory">Memory</a>
+        <a href="#providers">Providers</a>
         <a href="#safety">Safety</a>
         <a href="#roadmap">Roadmap</a>
       </nav>
@@ -50,7 +52,7 @@
       <div class="container">
         <div class="hero-inner">
           <a class="badge" href="https://github.com/LK-Hour/huno" target="_blank" rel="noopener">
-            <span class="dot"></span> v0.2.1 &middot; MIT &middot; Open Source
+            <span class="dot"></span> MIT &middot; Open Source &middot; 14 model providers
           </a>
           <h1 class="hero-title">
             Who knows your codebase?
@@ -58,9 +60,20 @@
           </h1>
           <p class="hero-sub">
             Huno is a <strong>project-aware AI developer assistant</strong>. It understands your
-            repository, remembers your decisions, audits your code, writes your docs, and runs safe
-            terminal workflows — all from your command line.
+            repository, remembers your decisions, audits your code, writes your docs, and asks
+            before it touches anything — all from your command line.
           </p>
+          <div class="hero-badges">
+            <a href="https://www.npmjs.com/package/@lk-hour/huno" target="_blank" rel="noopener">
+              <img src="https://img.shields.io/npm/v/%40lk-hour%2Fhuno?color=34d399&label=npm&labelColor=0d1522" alt="npm version" height="20" />
+            </a>
+            <a href="https://www.npmjs.com/package/@lk-hour/huno" target="_blank" rel="noopener">
+              <img src="https://img.shields.io/npm/dm/%40lk-hour%2Fhuno?color=22d3ee&label=downloads&labelColor=0d1522" alt="npm downloads" height="20" />
+            </a>
+            <a href="https://github.com/LK-Hour/huno/blob/main/LICENSE" target="_blank" rel="noopener">
+              <img src="https://img.shields.io/npm/l/%40lk-hour%2Fhuno?color=a78bfa&label=license&labelColor=0d1522" alt="MIT license" height="20" />
+            </a>
+          </div>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#install">
               <span class="cmd-prefix">$</span> npx @lk-hour/huno explain
@@ -141,13 +154,13 @@ Auth lives in <span class="file">src/lib/auth.ts</span> (JWT middleware + sessio
             <div class="card-icon">👥</div>
             <h3>Small Teams</h3>
             <p>Keep shared project memory and generate consistent documentation that actually matches the code.</p>
-            <code class="mini-cmd">huno doc architecture</code>
+            <code class="mini-cmd">huno doc -o docs/ARCHITECTURE.md</code>
           </article>
           <article class="card reveal">
             <div class="card-icon">🤖</div>
             <h3>AI Tool Builders</h3>
-            <p>Compose agent workflows and project-aware automation on top of a real developer harness.</p>
-            <code class="mini-cmd">huno team "audit backend API"</code>
+            <p>Script Huno into your own pipelines — non-interactive setup, scriptable config, and a real permission model.</p>
+            <code class="mini-cmd">huno configure --provider groq --api-key $KEY</code>
           </article>
         </div>
       </div>
@@ -158,7 +171,7 @@ Auth lives in <span class="file">src/lib/auth.ts</span> (JWT middleware + sessio
       <div class="container">
         <p class="eyebrow reveal">Core features</p>
         <h2 class="section-title reveal">More than a chatbot.<br />A developer harness.</h2>
-        <p class="section-lead reveal">Huno wraps any model with project context, memory, tools, permissions and workflows.</p>
+        <p class="section-lead reveal">Huno wraps any model with project context, memory, tools, and a permission system that asks before it acts.</p>
 
         <div class="grid-2">
           <article class="feature reveal">
@@ -203,27 +216,27 @@ Auth lives in <span class="file">src/lib/auth.ts</span> (JWT middleware + sessio
           </article>
           <article class="feature reveal">
             <div class="feature-head">
-              <span class="kbd">huno run</span>
+              <span class="kbd">run_command</span>
               <span class="feature-tag">Execute</span>
             </div>
             <h3>Safe Terminal Execution</h3>
-            <p>Translate natural language into commands — with approval prompts, risk warnings and full history. You stay in control.</p>
+            <p>Ask Huno to run something and it asks first — every write, patch, or shell command is risk-classified and shown to you before it happens.</p>
           </article>
           <article class="feature reveal">
             <div class="feature-head">
-              <span class="kbd">huno fix</span>
+              <span class="kbd">write_file</span>
               <span class="feature-tag">Edit</span>
             </div>
             <h3>Code Editing</h3>
-            <p>Plan, propose, and apply code changes with your approval. Huno shows a diff, runs validation, and summarizes what changed.</p>
+            <p>Huno can propose and apply file edits during a conversation, with your approval required first — and <code class="inline">/undo</code> to roll a change back.</p>
           </article>
           <article class="feature reveal">
             <div class="feature-head">
-              <span class="kbd">huno team</span>
-              <span class="feature-tag">Collaborate</span>
+              <span class="kbd">huno config</span>
+              <span class="feature-tag">Automate</span>
             </div>
-            <h3>Multi-Agent Workflows</h3>
-            <p>Manager, research, developer, reviewer and tester agents collaborate on larger tasks with shared memory and task logs.</p>
+            <h3>CI-Friendly & Scriptable</h3>
+            <p>Non-interactive setup for pipelines: <code class="inline">huno configure --provider groq --api-key $KEY</code>, plus <code class="inline">config get/set</code> and shell completion.</p>
           </article>
         </div>
       </div>
@@ -233,24 +246,24 @@ Auth lives in <span class="file">src/lib/auth.ts</span> (JWT middleware + sessio
     <section class="section" id="commands">
       <div class="container">
         <p class="eyebrow reveal">Command reference</p>
-        <h2 class="section-title reveal">Small surface. Deep power.</h2>
-        <p class="section-lead reveal">Six commands make a strong MVP. The rest builds on top.</p>
+        <h2 class="section-title reveal">Seventeen commands. Zero surprises.</h2>
+        <p class="section-lead reveal">Run <code class="inline">huno</code> alone to drop into the interactive REPL, or use any command directly for scripts and CI.</p>
         <div class="command-grid reveal">
           <div class="cmd-card">
             <code class="kbd">huno init</code>
-            <p>Initialize Huno in the current project.</p>
+            <p>Initialize Huno in the current project. <em>--force</em></p>
           </div>
           <div class="cmd-card">
             <code class="kbd">huno explain</code>
-            <p>Explain the current project. <em>--short, --deep, --json</em></p>
+            <p>Scan and explain the project structure. <em>--short, --json</em></p>
           </div>
           <div class="cmd-card">
             <code class="kbd">huno ask</code>
-            <p>Ask a project-aware question. <em>--files, --deep, --git</em></p>
+            <p>Ask a project-aware question. <em>-p, -m</em></p>
           </div>
           <div class="cmd-card">
             <code class="kbd">huno remember</code>
-            <p>Store a project memory. <em>--tag frontend</em></p>
+            <p>Store a project memory.</p>
           </div>
           <div class="cmd-card">
             <code class="kbd">huno recall</code>
@@ -258,14 +271,22 @@ Auth lives in <span class="file">src/lib/auth.ts</span> (JWT middleware + sessio
           </div>
           <div class="cmd-card">
             <code class="kbd">huno audit</code>
-            <p>Audit the project. <em>--frontend, --backend, --security</em></p>
+            <p>Static analysis & issue report. <em>--security, --deps, --json</em></p>
           </div>
-          <div class="cmd-card is-ext"><code class="kbd">huno doc</code><p>Generate documentation.</p></div>
-          <div class="cmd-card is-ext"><code class="kbd">huno run</code><p>Run terminal tasks safely.</p></div>
-          <div class="cmd-card is-ext"><code class="kbd">huno fix</code><p>Make code changes with approval.</p></div>
-          <div class="cmd-card is-ext"><code class="kbd">huno test</code><p>Run the test suite.</p></div>
-          <div class="cmd-card is-ext"><code class="kbd">huno diff</code><p>Show current changes.</p></div>
-          <div class="cmd-card is-ext"><code class="kbd">huno config</code><p>Manage providers & model routing.</p></div>
+          <div class="cmd-card">
+            <code class="kbd">huno configure</code>
+            <p>Set up a provider, key, and model — interactive or scripted.</p>
+          </div>
+          <div class="cmd-card is-ext"><code class="kbd">huno lint</code><p>Providers, types, code quality, git status.</p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno doc</code><p>Generate project documentation.</p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno providers</code><p>List supported model providers.</p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno model</code><p>Show or change the configured model.</p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno config</code><p>Get/set config values for CI & scripting.</p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno doctor</code><p>Diagnose environment & config issues.</p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno update</code><p>Self-update to the latest version. <em>--check</em></p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno completion</code><p>Shell tab-completion — bash, zsh, fish.</p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno clean</code><p>Clear regenerable cache & logs.</p></div>
+          <div class="cmd-card is-ext"><code class="kbd">huno reset</code><p>Reset project state to defaults.</p></div>
         </div>
       </div>
     </section>
@@ -277,11 +298,11 @@ Auth lives in <span class="file">src/lib/auth.ts</span> (JWT middleware + sessio
           <div class="split-copy">
             <p class="eyebrow reveal">Memory system</p>
             <h2 class="section-title reveal">Your project's second brain.</h2>
-            <p class="reveal">Huno builds knowledge in three layers, stored locally in your <code class="inline">.huno</code> directory. The project remembers what the developer would otherwise forget.</p>
+            <p class="reveal">Everything lives locally in your project's <code class="inline">.huno/</code> directory — nothing leaves your machine except the prompts sent to whichever model you chose.</p>
             <ul class="memory-list reveal">
-              <li><strong>Global memory</strong> — your preferences across every project.</li>
-              <li><strong>Project memory</strong> — decisions, conventions and why-things-are-the-way-they-are.</li>
-              <li><strong>Session memory</strong> — temporary context for the task at hand.</li>
+              <li><strong>Project memory</strong> — decisions and conventions you save with <code class="inline">huno remember</code>, searched with <code class="inline">huno recall</code>.</li>
+              <li><strong>Project map</strong> — a cached scan of your stack, structure, and important files.</li>
+              <li><strong>Session history</strong> — recent conversation turns, so context survives between REPL sessions.</li>
             </ul>
           </div>
           <div class="tree reveal" aria-label=".huno directory structure">
@@ -291,7 +312,7 @@ Auth lives in <span class="file">src/lib/auth.ts</span> (JWT middleware + sessio
 ├── <span class="file">project-map.json</span>
 ├── <span class="file">history.jsonl</span>
 ├── <span class="file">logs/</span>
-└── <span class="file">sessions/</span></pre>
+└── <span class="file">cache/</span></pre>
             <div class="tree-note">
               <span class="btn-copy" data-copy='huno remember "advisor requested better frontend error handling"'>copy</span>
               <code>$ huno remember "advisor requested better frontend error handling"</code>
@@ -306,25 +327,29 @@ Auth lives in <span class="file">src/lib/auth.ts</span> (JWT middleware + sessio
       <div class="container">
         <p class="eyebrow reveal">Model flexible</p>
         <h2 class="section-title reveal">Bring your own model.</h2>
-        <p class="section-lead reveal">Huno is not tied to one vendor. Choose whatever model fits the moment — or route per task.</p>
+        <p class="section-lead reveal">14 providers, several with generous free tiers and no credit card. Switch anytime with <code class="inline">huno model</code> or <code class="inline">/provider</code>.</p>
         <div class="chips reveal">
           <span class="chip">OpenRouter</span>
+          <span class="chip">GitHub Models</span>
           <span class="chip">Google Gemini</span>
-          <span class="chip">NVIDIA NIM</span>
           <span class="chip">Groq</span>
-          <span class="chip">Mistral</span>
           <span class="chip">Cerebras</span>
-          <span class="chip">Ollama</span>
-          <span class="chip">Local OpenAI-compatible</span>
+          <span class="chip">Mistral</span>
+          <span class="chip">SiliconFlow</span>
+          <span class="chip">Cohere</span>
+          <span class="chip">Hugging Face</span>
+          <span class="chip">NVIDIA NIM</span>
+          <span class="chip">SambaNova</span>
+          <span class="chip">Chutes AI</span>
+          <span class="chip">Cloudflare Workers AI</span>
+          <span class="chip">Ollama (local)</span>
         </div>
-        <pre class="code-block reveal">{
-  "routing": {
-    "coding":    { "provider": "openrouter", "model": "qwen/qwen3-coder" },
-    "reasoning": { "provider": "openrouter", "model": "deepseek/deepseek-r1" },
-    "fast":      { "provider": "gemini",     "model": "gemini-flash" },
-    "local":     { "provider": "ollama",     "model": "qwen2.5-coder:7b" }
-  }
-}</pre>
+        <pre class="code-block reveal"><span class="prompt">$</span> <span class="cmd">huno configure</span> --provider groq --api-key $GROQ_API_KEY
+<span class="ok">✓</span> Configured: groq (llama-3.3-70b-versatile)
+
+<span class="prompt">$</span> <span class="cmd">huno model</span>
+provider: groq
+model:    llama-3.3-70b-versatile</pre>
       </div>
     </section>
 
@@ -378,13 +403,14 @@ Approve? <span class="cursor">[y/N]</span></pre>
         <h2 class="section-title reveal">Built in layers.</h2>
         <div class="timeline reveal">
           <div class="tl-item is-done"><span class="tl-num">01</span><div><strong>CLI Foundation</strong> — init, explain, ask, providers</div></div>
-          <div class="tl-item is-done"><span class="tl-num">02</span><div><strong>Project Memory</strong> — remember, recall, tags</div></div>
-          <div class="tl-item is-done"><span class="tl-num">03</span><div><strong>Project Audit</strong> — quality & health checks</div></div>
+          <div class="tl-item is-done"><span class="tl-num">02</span><div><strong>Project Memory</strong> — remember, recall</div></div>
+          <div class="tl-item is-done"><span class="tl-num">03</span><div><strong>Project Audit &amp; Lint</strong> — quality, security, git, provider checks</div></div>
           <div class="tl-item is-done"><span class="tl-num">04</span><div><strong>Documentation Generator</strong> — README, API, architecture</div></div>
-          <div class="tl-item"><span class="tl-num">05</span><div><strong>Safe Terminal Operations</strong> — approval, risk, retry</div></div>
-          <div class="tl-item"><span class="tl-num">06</span><div><strong>Code Editing</strong> — diff preview, undo, validation</div></div>
-          <div class="tl-item"><span class="tl-num">07</span><div><strong>Multi-Agent Mode</strong> — manager, research, dev, review, test</div></div>
-          <div class="tl-item"><span class="tl-num">08</span><div><strong>Huno Cloud</strong> — sync project intelligence across machines</div></div>
+          <div class="tl-item is-done"><span class="tl-num">05</span><div><strong>Safe Terminal &amp; File Edits</strong> — risk classification, approval, <code class="inline">/undo</code></div></div>
+          <div class="tl-item is-done"><span class="tl-num">06</span><div><strong>CLI Maturity</strong> — self-update, shell completion, CI-scriptable config</div></div>
+          <div class="tl-item"><span class="tl-num">07</span><div><strong>Richer Code Editing</strong> — diff preview, multi-file edits, validation</div></div>
+          <div class="tl-item"><span class="tl-num">08</span><div><strong>Multi-Agent Mode</strong> — manager, research, dev, review, test</div></div>
+          <div class="tl-item"><span class="tl-num">09</span><div><strong>Huno Cloud</strong> — sync project intelligence across machines</div></div>
         </div>
       </div>
     </section>
@@ -405,6 +431,7 @@ Approve? <span class="cursor">[y/N]</span></pre>
             <pre><span class="prompt">$</span> cd your-project
 <span class="prompt">$</span> huno init
 <span class="prompt">$</span> huno explain
+<span class="prompt">$</span> huno configure <span class="accent"># pick a provider — several are free, no card needed</span>
 <span class="prompt">$</span> huno ask <span class="str">"what is this project about?"</span>
 <span class="prompt">$</span> huno audit</pre>
           </div>
@@ -432,6 +459,7 @@ Approve? <span class="cursor">[y/N]</span></pre>
         <a href="#features">Features</a>
         <a href="#commands">Commands</a>
         <a href="#memory">Memory</a>
+        <a href="#providers">Providers</a>
         <a href="#safety">Safety</a>
         <a href="#roadmap">Roadmap</a>
       </nav>

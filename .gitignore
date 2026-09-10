@@ -10,3 +10,4 @@ coverage/
 .huno/logs/
 *.log
 .huno/
+.vercel

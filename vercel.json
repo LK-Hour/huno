@@ -1,7 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "echo 'static site, no build step'",
+  "installCommand": "echo 'static site, no install step'",
+  "outputDirectory": ".",
   "cleanUrls": true,
-  "rewrites": [{ "source": "/", "destination": "/docs/index.html" }],
+  "rewrites": [
+    { "source": "/", "destination": "/docs" },
+    { "source": "/css/:path*", "destination": "/docs/css/:path*" },
+    { "source": "/js/:path*", "destination": "/docs/js/:path*" }
+  ],
   "headers": [
     {
       "source": "/docs/(.*)",

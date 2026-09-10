@@ -21,7 +21,7 @@
     "type": "git",
     "url": "git+https://github.com/LK-Hour/huno.git"
   },
-  "homepage": "https://github.com/LK-Hour/huno#readme",
+  "homepage": "https://huno.vercel.app",
   "bugs": {
     "url": "https://github.com/LK-Hour/huno/issues"
   },

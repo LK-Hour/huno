@@ -6,6 +6,8 @@
 
 > **Who knows your codebase? Huno knows.**
 
+**[huno.vercel.app](https://huno.vercel.app)** — features, commands, providers, and safety model.
+
 Huno is a project-aware AI developer tool designed to understand, remember, inspect, document, and eventually operate across your software projects from the terminal.
 
 It is not just another chatbot. Huno is designed as a **developer harness**: a system around language models that gives them project context, memory, tools, terminal access, permission controls, file understanding, and structured workflows.
