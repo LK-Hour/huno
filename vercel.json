@@ -8,7 +8,8 @@
   "rewrites": [
     { "source": "/", "destination": "/docs" },
     { "source": "/css/:path*", "destination": "/docs/css/:path*" },
-    { "source": "/js/:path*", "destination": "/docs/js/:path*" }
+    { "source": "/js/:path*", "destination": "/docs/js/:path*" },
+    { "source": "/img/:path*", "destination": "/docs/img/:path*" }
   ],
   "headers": [
     {

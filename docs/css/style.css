@@ -92,7 +92,7 @@ code.inline { background: rgba(34, 211, 238, .08); border: 1px solid var(--borde
 
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; }
 .brand:hover { text-decoration: none; }
-.brand-mark { border-radius: 8px; }
+.brand-mark { border-radius: 8px; display: block; object-fit: contain; }
 .brand-name { font-size: 1.15rem; letter-spacing: -.02em; }
 
 .site-nav { display: flex; gap: 22px; margin-left: auto; }
@@ -289,7 +289,6 @@ code.inline { background: rgba(34, 211, 238, .08); border: 1px solid var(--borde
 .feature h3, .card h3 { font-size: 1.12rem; margin-bottom: 8px; }
 .feature p, .card p { color: var(--text-dim); font-size: .93rem; }
 
-.card-icon { font-size: 1.7rem; margin-bottom: 12px; }
 .mini-cmd {
   display: block;
   margin-top: 14px;
@@ -400,8 +399,13 @@ code.inline { background: rgba(34, 211, 238, .08); border: 1px solid var(--borde
   border-radius: var(--radius);
   padding: 24px;
 }
-.safety-card h3 { font-size: 1.02rem; margin-bottom: 8px; }
+.safety-card h3 { font-size: 1.02rem; margin-bottom: 8px; display: flex; align-items: center; }
 .safety-card p { color: var(--text-dim); font-size: .9rem; }
+
+.risk-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 10px; flex-shrink: 0; }
+.dot-safe { background: var(--green); box-shadow: 0 0 8px -1px rgba(52, 211, 153, .8); }
+.dot-warn { background: var(--amber); box-shadow: 0 0 8px -1px rgba(251, 191, 36, .8); }
+.dot-high { background: var(--red); box-shadow: 0 0 8px -1px rgba(248, 113, 113, .8); }
 
 .approval { margin-top: 34px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 36px; align-items: center; }
 .terminal-mini { margin: 0; box-shadow: none; }
